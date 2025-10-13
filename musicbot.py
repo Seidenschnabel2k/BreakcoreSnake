@@ -16,7 +16,7 @@ if TOKEN is None:
 
 intents = discord.Intents.default()
 intents.message_content = True  # Required for prefix commands
-if os.getenv("DISCORD_DEBUG"):
+if not os.getenv("DISCORD_DEBUG") == None:
     bot = commands.Bot(command_prefix="~", intents=intents)
 else:
     bot = commands.Bot(command_prefix="!", intents=intents)

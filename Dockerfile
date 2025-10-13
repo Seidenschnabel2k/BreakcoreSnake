@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y ffmpeg && apt-get clean
 WORKDIR /app
 
 # Copy project files
-COPY . .
+COPY musicbot.py .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir python-dotenv discord.py yt-dlp pynacl
