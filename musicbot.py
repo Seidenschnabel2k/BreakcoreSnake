@@ -109,7 +109,7 @@ async def join(ctx):
     else:
         await ctx.send("You need to be in a voice channel first.")
 
-@bot.command()
+@bot.command(name="gtfo")
 async def leave(ctx):
     if ctx.voice_client:
         await ctx.voice_client.disconnect()
@@ -184,6 +184,12 @@ async def queue(ctx):
     else:
         q = "\n".join([f"{i+1}. {track['title']}" for i, track in enumerate(queue)])
         await ctx.send(f"Queue:\n{q}")
+        
+@bot.command(name="clear")
+async def clear(ctx):
+    if ctx.guild.id in music_queues:
+        music_queues[ctx.guild.id] = []
+    await ctx.send("Cleared the queue.")
 
 # -------------------- Run Bot --------------------
 bot.run(TOKEN)
