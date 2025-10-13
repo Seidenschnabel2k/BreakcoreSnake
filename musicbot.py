@@ -122,7 +122,7 @@ async def on_command_error(ctx, error):
 # -------------------- Commands --------------------
 
 
-@bot.command(name=tits)
+@bot.command(name="tits")
 async def join(ctx):
     if ctx.author.voice:
         await ctx.author.voice.channel.connect()
