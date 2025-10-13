@@ -80,6 +80,7 @@ async def play_next(ctx):
         queue = music_queues.get(ctx.guild.id, [])
         if not queue:
             await ctx.send("Queue finished.")
+            await bot.change_presence()
             return
 
         data = queue.pop(0)
@@ -89,6 +90,8 @@ async def play_next(ctx):
             after=lambda e: asyncio.run_coroutine_threadsafe(
                 play_next(ctx), bot.loop)
         )
+        await bot.change_presence(activity=discord.Activity(
+            type=2, name=f"{data['title']}"))
         await ctx.send(f"Now playing: {data['title']}")
     except Exception as e:
         error_msg = "".join(traceback.format_exception(
@@ -102,12 +105,12 @@ async def play_next(ctx):
 # -------------------- Events --------------------
 
 
-@bot.event
+@ bot.event
 async def on_ready():
     print(f"Bot is online as {bot.user}")
 
 
-@bot.event
+@ bot.event
 async def on_command_error(ctx, error):
     # Log error and send if possible
     print(f"Error in command {ctx.command}: {error}")
@@ -119,7 +122,7 @@ async def on_command_error(ctx, error):
 # -------------------- Commands --------------------
 
 
-@bot.command()
+@ bot.command()
 async def join(ctx):
     if ctx.author.voice:
         await ctx.author.voice.channel.connect()
@@ -127,7 +130,7 @@ async def join(ctx):
         await ctx.send("You need to be in a voice channel first.")
 
 
-@bot.command(name="gtfo")
+@ bot.command(name="gtfo")
 async def leave(ctx):
     if ctx.voice_client:
         await ctx.voice_client.disconnect()
@@ -136,7 +139,7 @@ async def leave(ctx):
         await ctx.send("I'm not in a voice channel.")
 
 
-@bot.command(name="p")
+@ bot.command(name="p")
 async def play(ctx, *, url):
     if not ctx.voice_client:
         if ctx.author.voice:
@@ -159,7 +162,7 @@ async def play(ctx, *, url):
             await ctx.send(f"Added {len(infos)} track(s) to the queue.")
 
 
-@bot.command(name="pl")
+@ bot.command(name="pl")
 async def playlist(ctx, *, url):
     if not ctx.voice_client:
         if ctx.author.voice:
@@ -185,14 +188,14 @@ async def playlist(ctx, *, url):
             await ctx.send(f"Added playlist with {len(infos)} tracks to the queue.")
 
 
-@bot.command(name="s")
+@ bot.command(name="s")
 async def skip(ctx):
     if ctx.voice_client and ctx.voice_client.is_playing():
         ctx.voice_client.stop()
         await ctx.send("Skipped current track.")
 
 
-@bot.command()
+@ bot.command()
 async def stop(ctx):
     if ctx.voice_client:
         music_queues[ctx.guild.id] = []
@@ -200,18 +203,18 @@ async def stop(ctx):
         await ctx.send("Stopped and cleared the queue.")
 
 
-@bot.command(name="q")
+@ bot.command(name="q")
 async def queue(ctx):
     queue = music_queues.get(ctx.guild.id, [])
     if not queue:
         await ctx.send("Queue is empty.")
     else:
         q = "\n".join([f"{i+1}. {track['title']}" for i,
-                      track in enumerate(queue)])
+                       track in enumerate(queue)])
         await ctx.send(f"Queue:\n{q}")
 
 
-@bot.command(name="clear")
+@ bot.command(name="clear")
 async def clear(ctx):
     if ctx.guild.id in music_queues:
         music_queues[ctx.guild.id] = []
