@@ -16,3 +16,7 @@ Timur prove
 Show length of songs
 
 Start/Stop function
+
+random playlist
+
+queue max list with offset
