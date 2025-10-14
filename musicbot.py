@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 import os
-import discord
-from discord.ext import commands
-import yt_dlp as youtube_dl
+import time
 import random
 import asyncio
 import traceback
+import discord
+from discord.ext import commands
+import yt_dlp as youtube_dl
 from dotenv import load_dotenv
 
-# Read environment variable
+# -------------------- Setup --------------------
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
@@ -16,39 +17,67 @@ if TOKEN is None:
     raise ValueError("No token found! Set DISCORD_TOKEN environment variable.")
 
 intents = discord.Intents.default()
-intents.message_content = True  # Required for prefix commands
+intents.message_content = True
 if not os.getenv("DISCORD_DEBUG") is None:
     bot = commands.Bot(command_prefix="~", intents=intents)
 else:
     bot = commands.Bot(command_prefix="!", intents=intents)
 
-# FFmpeg options for stable streaming
 ffmpeg_options = {
-    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn -bufsize 64k'
+    "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
+    "options": "-vn -bufsize 64k",
 }
 
-# yt-dlp options
 ytdl_format_options = {
-    'format': 'bestaudio/best',
-    'noplaylist': True,
-    'quiet': True,
-    'default_search': 'auto'
+    "format": "bestaudio/best",
+    "noplaylist": True,
+    "quiet": True,
+    "default_search": "auto",
+    "extract_flat": False,
 }
 
 playlist_ytdl_options = {
-    'format': 'bestaudio/best',
-    'noplaylist': False,
-    'quiet': True,
-    'default_search': 'auto',
-    'ignoreerrors': True
+    "format": "bestaudio/best",
+    "noplaylist": False,
+    "quiet": True,
+    "default_search": "auto",
+    "ignoreerrors": True,
 }
 
 ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 pl_ytdl = youtube_dl.YoutubeDL(playlist_ytdl_options)
 
-# Guild-specific queues
 music_queues = {}
+
+# -------------------- Helpers --------------------
+
+
+def format_duration(seconds: int) -> str:
+    if seconds is None:
+        return "Live"
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    if h:
+        return f"{h}:{m:02}:{s:02}"
+    else:
+        return f"{m}:{s:02}"
+
+
+def format_progress(start_time: float, total: int) -> str:
+    if total is None:
+        return "Live"
+    elapsed = int(time.time() - start_time)
+    if elapsed > total:
+        elapsed = total
+    em, es = divmod(elapsed, 60)
+    eh, em = divmod(em, 60)
+    tm, ts = divmod(total, 60)
+    th, tm = divmod(tm, 60)
+    if th:
+        return f"{eh}:{em:02}:{es:02} / {th}:{tm:02}:{ts:02}"
+    else:
+        return f"{em}:{es:02} / {tm}:{ts:02}"
+
 
 # -------------------- YTDLSource --------------------
 
@@ -57,22 +86,22 @@ class YTDLSource(discord.PCMVolumeTransformer):
     def __init__(self, source, *, data, volume=0.5):
         super().__init__(source, volume)
         self.data = data
-        self.title = data.get('title')
+        self.title = data.get("title")
+        self.start_time = None
 
     @classmethod
     async def from_url(cls, url, *, loop=None, stream=True, playlist=False):
         loop = loop or asyncio.get_event_loop()
         ydl = pl_ytdl if playlist else ytdl
-
-        # Extract info in a separate thread
-        data = await loop.run_in_executor(None, lambda: ydl.extract_info(url, download=not stream))
-
-        # Handle playlists
-        if 'entries' in data:
-            entries = [entry for entry in data['entries'] if entry]
+        data = await loop.run_in_executor(
+            None, lambda: ydl.extract_info(url, download=not stream)
+        )
+        if "entries" in data:
+            entries = [entry for entry in data["entries"] if entry]
             return entries
         else:
             return [data]
+
 
 # -------------------- Playback --------------------
 
@@ -86,23 +115,28 @@ async def play_next(ctx):
             return
 
         data = queue.pop(0)
-        source = discord.FFmpegPCMAudio(data['url'], **ffmpeg_options)
+        source = discord.FFmpegPCMAudio(data["url"], **ffmpeg_options)
+        wrapped = discord.PCMVolumeTransformer(source, volume=0.5)
+        wrapped.data = data
+        wrapped.start_time = time.time()
+
         ctx.voice_client.play(
-            discord.PCMVolumeTransformer(source, volume=0.5),
-            after=lambda e: asyncio.run_coroutine_threadsafe(
-                play_next(ctx), bot.loop)
+            wrapped,
+            after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop),
         )
-        await bot.change_presence(activity=discord.Activity(
-            type=2, name=f"{data['title']}",))
-        # await ctx.send(f"Now playing: {data['title']}")
+        ctx.voice_client.source = wrapped
+
+        await bot.change_presence(
+            activity=discord.Activity(type=2, name=f"{data['title']}")
+        )
     except Exception as e:
-        error_msg = "".join(traceback.format_exception(
-            type(e), e, e.__traceback__))
+        error_msg = "".join(traceback.format_exception(type(e), e, e.__traceback__))
         print(error_msg)
         try:
             await ctx.send(f"Error while playing: ```{e}```")
         except discord.Forbidden:
-            pass  # Can't send messages
+            pass
+
 
 # -------------------- Events --------------------
 
@@ -114,12 +148,12 @@ async def on_ready():
 
 @bot.event
 async def on_command_error(ctx, error):
-    # Log error and send if possible
     print(f"Error in command {ctx.command}: {error}")
     try:
         await ctx.send(f"An error occurred: ```{error}```")
     except discord.Forbidden:
         pass
+
 
 # -------------------- Commands --------------------
 
@@ -151,13 +185,15 @@ async def now(ctx, *, url):
             return
 
     async with ctx.typing():
-        infos = await YTDLSource.from_url(url, loop=bot.loop, stream=True, playlist=False)
+        infos = await YTDLSource.from_url(
+            url, loop=bot.loop, stream=True, playlist=False
+        )
         if ctx.guild.id not in music_queues:
             music_queues[ctx.guild.id] = []
-
+        for info in infos:
+            info["requester"] = str(ctx.author)
         music_queues[ctx.guild.id].insert(0, infos[0])
 
-        # Play first track immediately if not already playing
         if not ctx.voice_client.is_playing():
             await play_next(ctx)
         else:
@@ -174,13 +210,15 @@ async def play(ctx, *, url):
             return
 
     async with ctx.typing():
-        infos = await YTDLSource.from_url(url, loop=bot.loop, stream=True, playlist=False)
+        infos = await YTDLSource.from_url(
+            url, loop=bot.loop, stream=True, playlist=False
+        )
         if ctx.guild.id not in music_queues:
             music_queues[ctx.guild.id] = []
-
+        for info in infos:
+            info["requester"] = str(ctx.author)
         music_queues[ctx.guild.id].extend(infos)
 
-        # Play first track immediately if not already playing
         if not ctx.voice_client.is_playing():
             await play_next(ctx)
         else:
@@ -197,14 +235,15 @@ async def playlist(ctx, *, url):
             return
 
     async with ctx.typing():
-        infos = await YTDLSource.from_url(url, loop=bot.loop, stream=True, playlist=True)
+        infos = await YTDLSource.from_url(
+            url, loop=bot.loop, stream=True, playlist=True
+        )
         if ctx.guild.id not in music_queues:
             music_queues[ctx.guild.id] = []
-
-        # Limit playlist to 50 tracks to reduce lag
+        for info in infos:
+            info["requester"] = str(ctx.author)
         music_queues[ctx.guild.id].extend(infos)
 
-        # Play first track immediately if not already playing
         if not ctx.voice_client.is_playing():
             await play_next(ctx)
         else:
@@ -229,12 +268,49 @@ async def stop(ctx):
 @bot.command(name="q")
 async def queue(ctx):
     queue = music_queues.get(ctx.guild.id, [])
-    if not queue:
+    if not queue and not (ctx.voice_client and ctx.voice_client.is_playing()):
         await ctx.send("Queue is empty.")
+        return
+
+    embed = discord.Embed(title="Music Queue", color=discord.Color.blurple())
+
+    # Currently playing
+    if ctx.voice_client and ctx.voice_client.is_playing():
+        current = ctx.voice_client.source
+        if hasattr(current, "data"):
+            info = current.data
+            duration = info.get("duration")
+            requester = info.get("requester", "Unknown")
+            if hasattr(current, "start_time"):
+                progress = format_progress(current.start_time, duration)
+            else:
+                progress = format_duration(duration)
+            embed.add_field(
+                name="Now Playing",
+                value=f"[{info['title']}]({info.get('webpage_url', '')})\n"
+                f"{progress} | By: {requester}",
+                inline=False,
+            )
+            if "thumbnail" in info:
+                embed.set_image(url=info["thumbnail"])
     else:
-        q = "\n".join([f"{i+1}. {track['title']}" for i,
-                       track in enumerate(queue)])
-        await ctx.send(f"Queue:\n{q}")
+        embed.add_field(name="Now Playing", value="Nothing playing.", inline=False)
+
+    # Queue list
+    if queue:
+        desc = ""
+        for i, track in enumerate(queue[:10]):
+            duration = format_duration(track.get("duration"))
+            requester = track.get("requester", "Unknown")
+            desc += (
+                f"{i + 1}. [{track['title']}]({track.get('webpage_url', '')}) "
+                f"({duration}) • By: {requester}\n"
+            )
+        if len(queue) > 10:
+            desc += f"... and {len(queue) - 10} more."
+        embed.add_field(name="Up Next", value=desc, inline=False)
+
+    await ctx.send(embed=embed)
 
 
 @bot.command(name="clear")
@@ -249,6 +325,8 @@ async def shuffle(ctx):
     if ctx.guild.id in music_queues:
         random.shuffle(music_queues[ctx.guild.id])
     await ctx.send("Queue shuffled.")
+
+
 # -------------------- Run Bot --------------------
 if __name__ == "__main__":
     bot.run(TOKEN)
