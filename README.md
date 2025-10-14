@@ -14,3 +14,5 @@ Clear specific song in queue
 Timur prove
 
 Show length of songs
+
+Start/Stop function
