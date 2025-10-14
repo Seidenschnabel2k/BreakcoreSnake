@@ -12,3 +12,5 @@ Search without link
 Clear specific song in queue
 
 Timur prove
+
+Show length of songs
