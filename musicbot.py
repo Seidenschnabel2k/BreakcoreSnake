@@ -39,7 +39,8 @@ playlist_ytdl_options = {
     'format': 'bestaudio/best',
     'noplaylist': False,
     'quiet': True,
-    'default_search': 'auto'
+    'default_search': 'auto',
+    'ignoreerrors': True
 }
 
 ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
