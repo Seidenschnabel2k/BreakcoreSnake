@@ -174,7 +174,6 @@ async def playlist(ctx, *, url):
 
     async with ctx.typing():
         infos = await YTDLSource.from_url(url, loop=bot.loop, stream=True, playlist=True)
-        print(infos)
         if ctx.guild.id not in music_queues:
             music_queues[ctx.guild.id] = []
 
