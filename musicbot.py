@@ -3,6 +3,7 @@ import os
 import discord
 from discord.ext import commands
 import yt_dlp as youtube_dl
+import random
 import asyncio
 import traceback
 from dotenv import load_dotenv
@@ -16,7 +17,7 @@ if TOKEN is None:
 
 intents = discord.Intents.default()
 intents.message_content = True  # Required for prefix commands
-if not os.getenv("DISCORD_DEBUG") == None:
+if not os.getenv("DISCORD_DEBUG") is None:
     bot = commands.Bot(command_prefix="~", intents=intents)
 else:
     bot = commands.Bot(command_prefix="!", intents=intents)
@@ -140,6 +141,29 @@ async def leave(ctx):
         await ctx.send("I'm not in a voice channel.")
 
 
+@bot.command(name="n")
+async def now(ctx, *, url):
+    if not ctx.voice_client:
+        if ctx.author.voice:
+            await ctx.author.voice.channel.connect()
+        else:
+            await ctx.send("You need to join a voice channel first.")
+            return
+
+    async with ctx.typing():
+        infos = await YTDLSource.from_url(url, loop=bot.loop, stream=True, playlist=False)
+        if ctx.guild.id not in music_queues:
+            music_queues[ctx.guild.id] = []
+
+        music_queues[ctx.guild.id].insert(0, infos[0])
+
+        # Play first track immediately if not already playing
+        if not ctx.voice_client.is_playing():
+            await play_next(ctx)
+        else:
+            await ctx.send(f"Added {infos[0]['title']} to the front of the queue.")
+
+
 @bot.command(name="p")
 async def play(ctx, *, url):
     if not ctx.voice_client:
@@ -178,7 +202,6 @@ async def playlist(ctx, *, url):
             music_queues[ctx.guild.id] = []
 
         # Limit playlist to 50 tracks to reduce lag
-        infos = infos[:50]
         music_queues[ctx.guild.id].extend(infos)
 
         # Play first track immediately if not already playing
@@ -220,6 +243,12 @@ async def clear(ctx):
         music_queues[ctx.guild.id] = []
     await ctx.send("Cleared the queue.")
 
+
+@bot.command()
+async def shuffle(ctx):
+    if ctx.guild.id in music_queues:
+        random.shuffle(music_queues[ctx.guild.id])
+    await ctx.send("Queue shuffled.")
 # -------------------- Run Bot --------------------
 if __name__ == "__main__":
     bot.run(TOKEN)
