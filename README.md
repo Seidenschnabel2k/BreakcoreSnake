@@ -1,7 +1,7 @@
 TODO:
 Cookies
 
-Better Queue (Display thumbnail, hyperlink)
+~~Better Queue (Display thumbnail, hyperlink)~~
 
 Spotify function for Norman
 
@@ -13,10 +13,6 @@ Clear specific song in queue
 
 Timur prove
 
-Show length of songs
-
 Start/Stop function
-
-random playlist
 
 queue max list with offset
