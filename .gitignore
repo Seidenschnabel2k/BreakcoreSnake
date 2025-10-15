@@ -3,3 +3,9 @@
 
 # deply script
 ./deploy.sh
+
+# parquet
+log/*.parquet
+
+# Python cache
+__pycache__/

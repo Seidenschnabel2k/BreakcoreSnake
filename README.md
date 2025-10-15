@@ -66,13 +66,13 @@ docker run --env DISCORD_TOKEN=your-token-here breakcoresnake
 
 - Cookies
 - Spotify function for Norman
-- Search without link
 - Start/Stop function
 - History and Statistic function
   - url, elapsed_time, genre/tags(if possible), requester, title, when_played (time, date),  release_date 
 
 ### Completed
 
+- ~~Search without link~~
 - ~~Better Queue (Display thumbnail, hyperlink)~~
 - ~~Clear Queue Message (clean up)~~
 - ~~Clear specific song in queue~~
