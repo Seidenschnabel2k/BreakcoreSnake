@@ -26,7 +26,7 @@ else:
 
 ffmpeg_options = {
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
-    "options": "-vn -bufsize 64k",
+    "options": "-vn -bufsize 10m",
 }
 
 ytdl_format_options = {
@@ -261,7 +261,10 @@ async def play(ctx, *, url, requester=None):
                 info["requester"] = str(ctx.author)
         
             if is_duplicate(ctx, info):
-                await ctx.send(f"The track **{info['title']}** is already in the queue.")
+                await ctx.send(
+                    f"The track **[{info['title']}]({info.get('webpage_url', '')})** is already in the queue.",
+                    suppress_embeds=True
+                )
                 return
                 
         music_queues[ctx.guild.id].extend(infos)
@@ -271,8 +274,8 @@ async def play(ctx, *, url, requester=None):
 
     # Build embed
     embed = discord.Embed(
-        title=f"Added {len(infos)} track(s) to the queue",
-        description=f"Requested by: {(requester or ctx.author).mention}",
+        title="Added to the queue",
+        description=f"[{info['title']}]({info.get('webpage_url', '')})\nRequested by: {(requester or ctx.author).mention}",
         color=discord.Color.blurple(),
     )
 
