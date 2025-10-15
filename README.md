@@ -60,12 +60,6 @@ docker build -t breakcoresnake .
 docker run --env DISCORD_TOKEN=your-token-here breakcoresnake
 ```
 
-## Language Breakdown
-
-- Python: 97%
-- Dockerfile: 2%
-- Shell: 1%
-
 ## TODO
 
 ### Upcoming
@@ -75,6 +69,7 @@ docker run --env DISCORD_TOKEN=your-token-here breakcoresnake
 - Search without link
 - Start/Stop function
 - History and Statistic function
+  - url, elapsed_time, genre/tags(if possible), requester, title, when_played (time, date),  release_date 
 
 ### Completed
 
