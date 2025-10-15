@@ -125,7 +125,6 @@ async def play_next(ctx):
     try:
         queue = music_queues.get(ctx.guild.id, [])
         if not queue:
-            await ctx.send("Queue finished.")
             await bot.change_presence()
             return
 
@@ -236,8 +235,9 @@ async def play(ctx, *, url):
 
         if not ctx.voice_client.is_playing():
             await play_next(ctx)
+            await ctx.send(f"Now playing: {infos[0]['title']}")
         else:
-            await ctx.send(f"Added {len(infos)} track(s) to the queue.")
+            await ctx.send(f"Added {infos[0]['title']} to the end of the queue.")
 
 
 @bot.command(name="pl")
@@ -384,7 +384,83 @@ async def seek(ctx, *, position: str):
     )
     ctx.voice_client.source = wrapped
 
-    await ctx.send(f"⏩ Seeked to {format_duration(seconds)} in **{info['title']}**")
+    await ctx.send(f"Seeked to {format_duration(seconds)} in **{info['title']}**")
+    
+# Could refactor to use seek logic but for now just copying logic inside function   
+@bot.command(name="chapter")
+async def chapter(ctx, number: int):
+    if not ctx.voice_client or not ctx.voice_client.is_playing():
+        await ctx.send("No song is currently playing.")
+        return
+
+    current = ctx.voice_client.source
+    if not hasattr(current, "data"):
+        await ctx.send("No metadata found for the current track.")
+        return
+
+    info = current.data
+    chapters = info.get("chapters")
+    if not chapters:
+        await ctx.send("This track has no chapter markers.")
+        return
+
+    if number < 1 or number > len(chapters):
+        await ctx.send(f"Invalid chapter number. This track has {len(chapters)} chapters.")
+        return
+
+    ch = chapters[number - 1]
+    start = int(ch.get("start_time", 0))
+
+    # Stop current playback
+    ctx.voice_client.stop()
+
+    # Restart from chapter start
+    seek_opts = ffmpeg_options.copy()
+    seek_opts["before_options"] = (
+        f"-ss {start} -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
+    )
+    source = discord.FFmpegPCMAudio(info["url"], **seek_opts)
+    wrapped = discord.PCMVolumeTransformer(source, volume=0.5)
+    wrapped.data = info
+    wrapped.start_time = time.time() - start
+
+    ctx.voice_client.play(
+        wrapped,
+        after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop),
+    )
+    ctx.voice_client.source = wrapped
+
+    await ctx.send(
+        f"Skipped to chapter {number}: **{ch.get('title','(Untitled)')}** at {format_duration(start)}"
+    )
+    
+@bot.command(name="chapters")
+async def chapters(ctx):
+    if not ctx.voice_client or not ctx.voice_client.is_playing():
+        await ctx.send("No song is currently playing.")
+        return
+
+    current = ctx.voice_client.source
+    if not hasattr(current, "data"):
+        await ctx.send("No metadata found for the current track.")
+        return
+
+    info = current.data
+    chapters = info.get("chapters")
+    if not chapters:
+        await ctx.send("This track has no chapter markers.")
+        return
+
+    lines = []
+    for i, ch in enumerate(chapters, start=1):
+        start = int(ch.get("start_time", 0))
+        title = ch.get("title", "(Untitled)")
+        lines.append(f"**{i}.** [{format_duration(start)}] {title}")
+
+    msg = "\n".join(lines)
+    await ctx.send(f"Chapters for **{info['title']}**:\n{msg}")
+
+
 
 
 # -------------------- Run Bot --------------------
