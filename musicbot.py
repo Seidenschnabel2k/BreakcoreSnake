@@ -61,9 +61,9 @@ def format_duration(seconds: int) -> str:
     m, s = divmod(seconds, 60)
     h, m = divmod(m, 60)
     if h:
-        return f"{h}:{m:02}:{s:02}"
+        return f"{h:.0f}:{m:02.0f}:{s:02.0f}"
     else:
-        return f"{m}:{s:02}"
+        return f"{m:02.0f}:{s:02.0f}"
 
 
 def format_progress(start_time: float, total: int) -> str:
@@ -77,9 +77,9 @@ def format_progress(start_time: float, total: int) -> str:
     tm, ts = divmod(total, 60)
     th, tm = divmod(tm, 60)
     if th:
-        return f"{eh}:{em:02}:{es:02} / {th}:{tm:02}:{ts:02}"
+        return f"{eh:.0f}:{em:02.0f}:{es:02.0f} / {th}:{tm:02.0f}:{ts:02.0f}"
     else:
-        return f"{em}:{es:02} / {tm}:{ts:02}"
+        return f"{em:.0f}:{es:02.0f} / {tm:.0f}:{ts:02.0f}"
 
 
 def parse_time(input_str: str) -> int:
@@ -95,14 +95,13 @@ def parse_time(input_str: str) -> int:
         return h * 3600 + m * 60 + s
     else:
         raise ValueError("Invalid time format. Use ss, mm:ss or hh:mm:ss.")
-    
-    
+
+
 def is_duplicate(ctx, track_info):
     """Check if a track is already in the queue (by URL)."""
     queue = music_queues.get(ctx.guild.id, [])
     track_url = track_info.get("webpage_url")
     return any(item.get("webpage_url") == track_url for item in queue)
-
 
 
 # -------------------- YTDLSource --------------------
@@ -147,7 +146,8 @@ async def play_next(ctx):
 
         ctx.voice_client.play(
             wrapped,
-            after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop),
+            after=lambda e: asyncio.run_coroutine_threadsafe(
+                play_next(ctx), bot.loop),
         )
         ctx.voice_client.source = wrapped
 
@@ -155,7 +155,8 @@ async def play_next(ctx):
             activity=discord.Activity(type=2, name=f"{data['title']}")
         )
     except Exception as e:
-        error_msg = "".join(traceback.format_exception(type(e), e, e.__traceback__))
+        error_msg = "".join(traceback.format_exception(
+            type(e), e, e.__traceback__))
         print(error_msg)
         try:
             await ctx.send(f"Error while playing: ```{e}```")
@@ -264,7 +265,8 @@ async def play(ctx, *, url, interaction_user=None):
 
             if is_duplicate(ctx, info):
                 await ctx.send(
-                    f"The track **[{info['title']}]({info.get('webpage_url', '')})** is already in the queue.",
+                    f"The track **[{info['title']}]({info.get(
+                        'webpage_url', '')})** is already in the queue.",
                     suppress_embeds=True
                 )
                 return
@@ -378,7 +380,8 @@ async def queue(ctx):
             if "thumbnail" in info:
                 embed.set_image(url=info["thumbnail"])
     else:
-        embed.add_field(name="Now Playing", value="Nothing playing.", inline=False)
+        embed.add_field(name="Now Playing",
+                        value="Nothing playing.", inline=False)
 
     # Queue list
     if queue:
@@ -449,7 +452,8 @@ async def seek(ctx, *, position: str):
 
     ctx.voice_client.play(
         wrapped,
-        after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop),
+        after=lambda e: asyncio.run_coroutine_threadsafe(
+            play_next(ctx), bot.loop),
     )
     ctx.voice_client.source = wrapped
 
@@ -498,12 +502,14 @@ async def chapter(ctx, number: int):
 
     ctx.voice_client.play(
         wrapped,
-        after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop),
+        after=lambda e: asyncio.run_coroutine_threadsafe(
+            play_next(ctx), bot.loop),
     )
     ctx.voice_client.source = wrapped
 
     await ctx.send(
-        f"Skipped to chapter {number}: **{ch.get('title', '(Untitled)')}** at {format_duration(start)}"
+        f"Skipped to chapter {
+            number}: **{ch.get('title', '(Untitled)')}** at {format_duration(start)}"
     )
 
 
