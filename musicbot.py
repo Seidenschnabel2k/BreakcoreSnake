@@ -79,6 +79,21 @@ def format_progress(start_time: float, total: int) -> str:
         return f"{em}:{es:02} / {tm}:{ts:02}"
 
 
+def parse_time(input_str: str) -> int:
+    """Parses time string (ss, mm:ss, hh:mm:ss) into seconds."""
+    parts = input_str.strip().split(":")
+    if len(parts) == 1:
+        return int(parts[0])  # seconds only
+    elif len(parts) == 2:
+        m, s = map(int, parts)
+        return m * 60 + s
+    elif len(parts) == 3:
+        h, m, s = map(int, parts)
+        return h * 3600 + m * 60 + s
+    else:
+        raise ValueError("Invalid time format. Use ss, mm:ss or hh:mm:ss.")
+
+
 # -------------------- YTDLSource --------------------
 
 
@@ -325,6 +340,51 @@ async def shuffle(ctx):
     if ctx.guild.id in music_queues:
         random.shuffle(music_queues[ctx.guild.id])
     await ctx.send("Queue shuffled.")
+
+
+@bot.command(name="seek")
+async def seek(ctx, *, position: str):
+    if not ctx.voice_client or not ctx.voice_client.is_playing():
+        await ctx.send("No song is currently playing.")
+        return
+
+    try:
+        seconds = parse_time(position)
+    except ValueError:
+        await ctx.send("Invalid time format. Use ss, mm:ss or hh:mm:ss.")
+        return
+
+    current = ctx.voice_client.source
+    if not hasattr(current, "data"):
+        await ctx.send("No metadata found for the current track.")
+        return
+
+    info = current.data
+    duration = info.get("duration")
+    if duration and seconds >= duration:
+        await ctx.send("Seek position is beyond track length.")
+        return
+
+    # Stop current playback
+    ctx.voice_client.stop()
+
+    # Restart with seek
+    seek_opts = ffmpeg_options.copy()
+    seek_opts["before_options"] = (
+        f"-ss {seconds} -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
+    )
+    source = discord.FFmpegPCMAudio(info["url"], **seek_opts)
+    wrapped = discord.PCMVolumeTransformer(source, volume=0.5)
+    wrapped.data = info
+    wrapped.start_time = time.time() - seconds  # shift timeline correctly
+
+    ctx.voice_client.play(
+        wrapped,
+        after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop),
+    )
+    ctx.voice_client.source = wrapped
+
+    await ctx.send(f"⏩ Seeked to {format_duration(seconds)} in **{info['title']}**")
 
 
 # -------------------- Run Bot --------------------
