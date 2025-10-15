@@ -1,18 +1,21 @@
 TODO:
+
 Cookies
 
 ~~Better Queue (Display thumbnail, hyperlink)~~
 
 Spotify function for Norman
 
-Clear Queue Message (clean up)
+~~Clear Queue Message (clean up)~~
 
 Search without link
 
-Clear specific song in queue
+~~Clear specific song in queue~~
 
-Timur prove
+~~Timur prove~~
 
 Start/Stop function
 
 queue max list with offset
+
+History and statistic
