@@ -18,7 +18,7 @@ BreakcoreSnake is a feature-rich Discord music bot, developed in Python. The bot
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.12+
 - [FFmpeg](https://ffmpeg.org/) installed and available in your PATH
 - Discord bot token ([How to get one](https://discordpy.readthedocs.io/en/stable/discord.html))
 
