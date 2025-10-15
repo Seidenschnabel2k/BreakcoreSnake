@@ -9,6 +9,7 @@ from discord.ext import commands
 from discord.ui import View, Button
 import yt_dlp as youtube_dl
 from dotenv import load_dotenv
+from logger import Logger
 
 # -------------------- Setup --------------------
 load_dotenv()
@@ -45,6 +46,7 @@ playlist_ytdl_options = {
     "ignoreerrors": True,
 }
 
+logger = Logger()
 ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 pl_ytdl = youtube_dl.YoutubeDL(playlist_ytdl_options)
 
@@ -230,7 +232,7 @@ async def now(ctx, *, url):
         if ctx.guild.id not in music_queues:
             music_queues[ctx.guild.id] = []
         for info in infos:
-            info["requester"] = str(ctx.author)
+            info["requester"] = ctx.author
         music_queues[ctx.guild.id].insert(0, infos[0])
 
         if not ctx.voice_client.is_playing():
@@ -240,7 +242,7 @@ async def now(ctx, *, url):
 
 
 @bot.command(name="p")
-async def play(ctx, *, url, requester=None):
+async def play(ctx, *, url, interaction_user=None):
     if not ctx.voice_client:
         if ctx.author.voice:
             await ctx.author.voice.channel.connect()
@@ -254,53 +256,52 @@ async def play(ctx, *, url, requester=None):
         )
         if ctx.guild.id not in music_queues:
             music_queues[ctx.guild.id] = []
+
         for info in infos:
-            if requester:
-                info["requester"] = str(requester)
-            else:
-                info["requester"] = str(ctx.author)
-        
+            info["requester"] = interaction_user or ctx.author
+            # Log track using requester ID
+            logger.log_track(info, requester_id=info["requester"].id)
+
             if is_duplicate(ctx, info):
                 await ctx.send(
                     f"The track **[{info['title']}]({info.get('webpage_url', '')})** is already in the queue.",
                     suppress_embeds=True
                 )
                 return
-                
+
         music_queues[ctx.guild.id].extend(infos)
 
         if not ctx.voice_client.is_playing():
             await play_next(ctx)
 
-    # Build embed
-    embed = discord.Embed(
-        title="Added to the queue",
-        description=f"[{info['title']}]({info.get('webpage_url', '')})\nRequested by: {(requester or ctx.author).mention}",
-        color=discord.Color.blurple(),
-    )
+        # Build embed
+        embed = discord.Embed(
+            title="Added to the queue",
+            description=f"[{infos[0]['title']}]({infos[0].get('webpage_url', '')})\nRequested by: {info["requester"].mention}",
+            color=discord.Color.blurple(),
+        )
 
-    if infos[0].get("thumbnail"):
-        embed.set_thumbnail(url=infos[0]["thumbnail"])
+        if infos[0].get("thumbnail"):
+            embed.set_thumbnail(url=infos[0]["thumbnail"])
 
-    # Build a view with a repeat button
-    view = View()
+        # Build a view with a repeat button
+        view = discord.ui.View()
 
-    class RepeatButton(Button):
-        def __init__(self):
-            super().__init__(
-                style=discord.ButtonStyle.secondary, emoji="🔁", label="Repeat"
-            )
+        class RepeatButton(discord.ui.Button):
+            def __init__(self):
+                super().__init__(
+                    style=discord.ButtonStyle.secondary, emoji="🔁", label="Repeat"
+                )
 
-        async def callback(self, interaction):
-            # Immediately acknowledge the interaction to avoid 404
-            await interaction.response.defer()
+            async def callback(self, interaction):
+                await interaction.response.defer()
+                # Re-run the same play command for this user
+                await play(ctx, url=url, interaction=interaction)
 
-            # Re-run the same !p command
-            await play(ctx, url=url, requester=interaction.user)
+        view.add_item(RepeatButton())
 
-    view.add_item(RepeatButton())
+        await ctx.send(embed=embed, view=view)
 
-    await ctx.send(embed=embed, view=view)
 
 
 @bot.command(name="pl")
@@ -318,14 +319,19 @@ async def playlist(ctx, *, url):
         )
         if ctx.guild.id not in music_queues:
             music_queues[ctx.guild.id] = []
+
         for info in infos:
-            info["requester"] = str(ctx.author)
+            info["requester"] = ctx.author
+            # Log track using requester ID
+            logger.log_track(info, requester_id=ctx.author.id)
+
         music_queues[ctx.guild.id].extend(infos)
 
         if not ctx.voice_client.is_playing():
             await play_next(ctx)
         else:
             await ctx.send(f"Added playlist with {len(infos)} tracks to the queue.")
+
 
 
 @bot.command(name="s")
@@ -366,7 +372,7 @@ async def queue(ctx):
             embed.add_field(
                 name="Now Playing",
                 value=f"[{info['title']}]({info.get('webpage_url', '')})\n"
-                f"{progress} | By: {requester}",
+                f"{progress} | By: {requester.mention}",
                 inline=False,
             )
             if "thumbnail" in info:
