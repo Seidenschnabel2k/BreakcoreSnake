@@ -6,6 +6,7 @@ import asyncio
 import traceback
 import discord
 from discord.ext import commands
+from discord.ui import View, Button
 import yt_dlp as youtube_dl
 from dotenv import load_dotenv
 
@@ -92,6 +93,14 @@ def parse_time(input_str: str) -> int:
         return h * 3600 + m * 60 + s
     else:
         raise ValueError("Invalid time format. Use ss, mm:ss or hh:mm:ss.")
+    
+    
+def is_duplicate(ctx, track_info):
+    """Check if a track is already in the queue (by URL)."""
+    queue = music_queues.get(ctx.guild.id, [])
+    track_url = track_info.get("webpage_url")
+    return any(item.get("webpage_url") == track_url for item in queue)
+
 
 
 # -------------------- YTDLSource --------------------
@@ -169,6 +178,22 @@ async def on_command_error(ctx, error):
         pass
 
 
+# -------------------- Hooks --------------------
+
+
+@bot.before_invoke
+async def cleanup(ctx):
+    try:
+        await ctx.message.delete()
+    except discord.Forbidden:
+        await ctx.send(
+            "I don't have permission to delete command messages. "
+            "Please give me the 'Manage Messages' permission."
+        )
+    except discord.HTTPException as e:
+        await ctx.send(f"Failed to delete the command message: {e}")
+
+
 # -------------------- Commands --------------------
 
 
@@ -215,7 +240,7 @@ async def now(ctx, *, url):
 
 
 @bot.command(name="p")
-async def play(ctx, *, url):
+async def play(ctx, *, url, requester=None):
     if not ctx.voice_client:
         if ctx.author.voice:
             await ctx.author.voice.channel.connect()
@@ -230,14 +255,49 @@ async def play(ctx, *, url):
         if ctx.guild.id not in music_queues:
             music_queues[ctx.guild.id] = []
         for info in infos:
-            info["requester"] = str(ctx.author)
+            if requester:
+                info["requester"] = str(requester)
+            else:
+                info["requester"] = str(ctx.author)
+        
+            if is_duplicate(ctx, info):
+                await ctx.send(f"The track **{info['title']}** is already in the queue.")
+                return
+                
         music_queues[ctx.guild.id].extend(infos)
 
         if not ctx.voice_client.is_playing():
             await play_next(ctx)
-            await ctx.send(f"Now playing: {infos[0]['title']}")
-        else:
-            await ctx.send(f"Added {infos[0]['title']} to the end of the queue.")
+
+    # Build embed
+    embed = discord.Embed(
+        title=f"Added {len(infos)} track(s) to the queue",
+        description=f"Requested by: {(requester or ctx.author).mention}",
+        color=discord.Color.blurple(),
+    )
+
+    if infos[0].get("thumbnail"):
+        embed.set_thumbnail(url=infos[0]["thumbnail"])
+
+    # Build a view with a repeat button
+    view = View()
+
+    class RepeatButton(Button):
+        def __init__(self):
+            super().__init__(
+                style=discord.ButtonStyle.secondary, emoji="🔁", label="Repeat"
+            )
+
+        async def callback(self, interaction):
+            # Immediately acknowledge the interaction to avoid 404
+            await interaction.response.defer()
+
+            # Re-run the same !p command
+            await play(ctx, url=url, requester=interaction.user)
+
+    view.add_item(RepeatButton())
+
+    await ctx.send(embed=embed, view=view)
 
 
 @bot.command(name="pl")
@@ -319,7 +379,7 @@ async def queue(ctx):
             requester = track.get("requester", "Unknown")
             desc += (
                 f"{i + 1}. [{track['title']}]({track.get('webpage_url', '')}) "
-                f"({duration}) • By: {requester}\n"
+                f"({duration}) | By: {requester}\n"
             )
         if len(queue) > 10:
             desc += f"... and {len(queue) - 10} more."
@@ -385,8 +445,9 @@ async def seek(ctx, *, position: str):
     ctx.voice_client.source = wrapped
 
     await ctx.send(f"Seeked to {format_duration(seconds)} in **{info['title']}**")
-    
-# Could refactor to use seek logic but for now just copying logic inside function   
+
+
+# Could refactor to use seek logic but for now just copying logic inside function
 @bot.command(name="chapter")
 async def chapter(ctx, number: int):
     if not ctx.voice_client or not ctx.voice_client.is_playing():
@@ -405,7 +466,9 @@ async def chapter(ctx, number: int):
         return
 
     if number < 1 or number > len(chapters):
-        await ctx.send(f"Invalid chapter number. This track has {len(chapters)} chapters.")
+        await ctx.send(
+            f"Invalid chapter number. This track has {len(chapters)} chapters."
+        )
         return
 
     ch = chapters[number - 1]
@@ -431,9 +494,10 @@ async def chapter(ctx, number: int):
     ctx.voice_client.source = wrapped
 
     await ctx.send(
-        f"Skipped to chapter {number}: **{ch.get('title','(Untitled)')}** at {format_duration(start)}"
+        f"Skipped to chapter {number}: **{ch.get('title', '(Untitled)')}** at {format_duration(start)}"
     )
-    
+
+
 @bot.command(name="chapters")
 async def chapters(ctx):
     if not ctx.voice_client or not ctx.voice_client.is_playing():
@@ -459,8 +523,6 @@ async def chapters(ctx):
 
     msg = "\n".join(lines)
     await ctx.send(f"Chapters for **{info['title']}**:\n{msg}")
-
-
 
 
 # -------------------- Run Bot --------------------
