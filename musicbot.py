@@ -23,6 +23,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 if not os.getenv("DISCORD_DEBUG") is None:
     bot = commands.Bot(command_prefix="~", intents=intents)
+    TARGET_CHANNEL_ID = os.getenv("DISCORD_CHANNEL_ID_DEBUG")
 else:
     bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -32,7 +33,7 @@ ffmpeg_options = {
 }
 
 ytdl_format_options = {
-    "format": "bestaudio/best",
+    "format": "bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio/best",
     "noplaylist": True,
     "quiet": True,
     "default_search": "auto",
@@ -40,7 +41,7 @@ ytdl_format_options = {
 }
 
 playlist_ytdl_options = {
-    "format": "bestaudio/best",
+    "format": "bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio/best",
     "noplaylist": False,
     "quiet": True,
     "default_search": "auto",
@@ -99,12 +100,23 @@ def parse_time(input_str: str) -> int:
 
 
 def is_duplicate(ctx, track_info):
-    """Check if a track is already in the queue (by URL)."""
-    queue = music_queues.get(ctx.guild.id, [])
+    """Check if a track is already in the queue OR currently playing (by URL)."""
     track_url = track_info.get("webpage_url")
-    return any(item.get("webpage_url") == track_url for item in queue)
 
-async def send_message(ctx, content=None, embed=None, view=None):
+    # Check queue
+    queue = music_queues.get(ctx.guild.id, [])
+    if any(item.get("webpage_url") == track_url for item in queue):
+        return True
+
+    # Check currently playing
+    if ctx.voice_client and ctx.voice_client.is_playing():
+        current = ctx.voice_client.source
+        if hasattr(current, "data") and current.data.get("webpage_url") == track_url:
+            return True
+
+    return False
+
+async def send_message(ctx, content=None, embed=None, view=None,  suppress_embeds=False):
     """Send message either to target channel or fallback to ctx.channel."""
     channel = None
     if TARGET_CHANNEL_ID:
@@ -112,7 +124,7 @@ async def send_message(ctx, content=None, embed=None, view=None):
     if not channel:
         channel = ctx.channel  # fallback
 
-    await channel.send(content=content, embed=embed, view=view)
+    await channel.send(content=content, embed=embed, view=view, suppress_embeds=suppress_embeds)
 
 
 # -------------------- YTDLSource --------------------
@@ -301,17 +313,21 @@ async def play(ctx, *, url, interaction_user=None):
         view = discord.ui.View()
 
         class RepeatButton(discord.ui.Button):
-            def __init__(self):
-                super().__init__(
-                    style=discord.ButtonStyle.secondary, emoji="🔁", label="Repeat"
+            def __init__(self, info):
+                super().__init__(style=discord.ButtonStyle.secondary, emoji="🔁", label="Repeat")
+                self.info = info  # Store original track info dict
+
+            async def callback(self, interaction: discord.Interaction):
+                await interaction.response.defer()
+
+                # Call the same play command as if the user typed !p <url>
+                await play(
+                    ctx, 
+                    url=self.info["webpage_url"],  # replay using permanent webpage_url
+                    interaction_user=interaction.user  # requester is the button clicker
                 )
 
-            async def callback(self, interaction):
-                await interaction.response.defer()
-                # Re-run the same play command for this user
-                await play(ctx, url=url, interaction=interaction)
-
-        view.add_item(RepeatButton())
+        view.add_item(RepeatButton(infos[0]))
 
         await send_message(ctx,embed=embed, view=view)
 
