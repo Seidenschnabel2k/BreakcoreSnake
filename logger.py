@@ -2,6 +2,7 @@ import os
 import pandas as pd
 from datetime import datetime
 
+
 class Logger:
     def __init__(self, log_dir="log", filename="music_log.parquet"):
         self.log_dir = log_dir
@@ -17,7 +18,8 @@ class Logger:
             "played_at",
         ]
         if not os.path.exists(self.log_file):
-            pd.DataFrame(columns=self.columns).to_parquet(self.log_file, index=False)
+            pd.DataFrame(columns=self.columns).to_parquet(
+                self.log_file, index=False)
 
     def _normalize_info(self, info_dict: dict, requester_id: int) -> dict:
         """
@@ -30,15 +32,18 @@ class Logger:
             genre = tags[0] if tags else None
 
         # Upload date: YouTube: upload_date (YYYYMMDD), SoundCloud: release_date
-        upload_date = info_dict.get("upload_date") or info_dict.get("release_date")
+        upload_date = info_dict.get(
+            "upload_date") or info_dict.get("release_date")
         if upload_date:
             if len(str(upload_date)) == 8:  # YouTube YYYYMMDD
-                upload_date = f"{str(upload_date)[:4]}-{str(upload_date)[4:6]}-{str(upload_date)[6:]}"
+                upload_date = f"{
+                    str(upload_date)[:4]}-{str(upload_date)[4:6]}-{str(upload_date)[6:]}"
         else:
             upload_date = None
 
         title = info_dict.get("title") or "Unknown Title"
-        url = info_dict.get("webpage_url") or info_dict.get("url") or "Unknown URL"
+        url = info_dict.get("webpage_url") or info_dict.get(
+            "url") or "Unknown URL"
         duration = info_dict.get("duration")  # in seconds
 
         return {
@@ -59,7 +64,8 @@ class Logger:
         df = pd.read_parquet(self.log_file)
         df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
         df.to_parquet(self.log_file, index=False)
-        
+
+
 if __name__ == "__main__":
     # Path to your log file
     log_file = "log/music_log.parquet"
@@ -68,4 +74,4 @@ if __name__ == "__main__":
     df = pd.read_parquet(log_file)
 
     # Display the first few rows
-    print(df.head())
+    print(df.tail())

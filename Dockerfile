@@ -8,6 +8,7 @@ WORKDIR /app
 
 # Copy project files
 COPY musicbot.py .
+COPY logger.py .
 COPY requirements.txt .
 
 # Install Python dependencies
