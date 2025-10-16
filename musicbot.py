@@ -6,7 +6,6 @@ import asyncio
 import traceback
 import discord
 from discord.ext import commands
-from discord.ui import View, Button
 import yt_dlp as youtube_dl
 from dotenv import load_dotenv
 from logger import Logger
@@ -14,6 +13,8 @@ from logger import Logger
 # -------------------- Setup --------------------
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
+
+TARGET_CHANNEL_ID = os.getenv("DISCORD_CHANNEL_ID")
 
 if TOKEN is None:
     raise ValueError("No token found! Set DISCORD_TOKEN environment variable.")
@@ -103,6 +104,16 @@ def is_duplicate(ctx, track_info):
     track_url = track_info.get("webpage_url")
     return any(item.get("webpage_url") == track_url for item in queue)
 
+async def send_message(ctx, content=None, embed=None, view=None):
+    """Send message either to target channel or fallback to ctx.channel."""
+    channel = None
+    if TARGET_CHANNEL_ID:
+        channel = bot.get_channel(int(TARGET_CHANNEL_ID))
+    if not channel:
+        channel = ctx.channel  # fallback
+
+    await channel.send(content=content, embed=embed, view=view)
+
 
 # -------------------- YTDLSource --------------------
 
@@ -159,7 +170,7 @@ async def play_next(ctx):
             type(e), e, e.__traceback__))
         print(error_msg)
         try:
-            await ctx.send(f"Error while playing: ```{e}```")
+            await send_message(ctx, f"Error while playing: ```{e}```")
         except discord.Forbidden:
             pass
 
@@ -176,7 +187,7 @@ async def on_ready():
 async def on_command_error(ctx, error):
     print(f"Error in command {ctx.command}: {error}")
     try:
-        await ctx.send(f"An error occurred: ```{error}```")
+        await send_message(ctx,f"An error occurred: ```{error}```")
     except discord.Forbidden:
         pass
 
@@ -239,7 +250,7 @@ async def now(ctx, *, url):
         if not ctx.voice_client.is_playing():
             await play_next(ctx)
         else:
-            await ctx.send(f"Added {infos[0]['title']} to the front of the queue.")
+            await send_message(ctx,f"Added {infos[0]['title']} to the front of the queue.")
 
 
 @bot.command(name="p")
@@ -264,7 +275,7 @@ async def play(ctx, *, url, interaction_user=None):
             logger.log_track(info, requester_id=info["requester"].id)
 
             if is_duplicate(ctx, info):
-                await ctx.send(
+                await send_message(ctx,
                     f"The track **[{info['title']}]({info.get(
                         'webpage_url', '')})** is already in the queue.",
                     suppress_embeds=True
@@ -302,7 +313,7 @@ async def play(ctx, *, url, interaction_user=None):
 
         view.add_item(RepeatButton())
 
-        await ctx.send(embed=embed, view=view)
+        await send_message(ctx,embed=embed, view=view)
 
 
 
@@ -332,7 +343,7 @@ async def playlist(ctx, *, url):
         if not ctx.voice_client.is_playing():
             await play_next(ctx)
         else:
-            await ctx.send(f"Added playlist with {len(infos)} tracks to the queue.")
+            await send_message(ctx,f"Added playlist with {len(infos)} tracks to the queue.")
 
 
 
@@ -340,7 +351,7 @@ async def playlist(ctx, *, url):
 async def skip(ctx):
     if ctx.voice_client and ctx.voice_client.is_playing():
         ctx.voice_client.stop()
-        await ctx.send("Skipped current track.")
+        await send_message(ctx,"Skipped current track.")
 
 
 @bot.command()
@@ -348,14 +359,14 @@ async def stop(ctx):
     if ctx.voice_client:
         music_queues[ctx.guild.id] = []
         ctx.voice_client.stop()
-        await ctx.send("Stopped and cleared the queue.")
+        await send_message(ctx,"Stopped and cleared the queue.")
 
 
 @bot.command(name="q")
 async def queue(ctx):
     queue = music_queues.get(ctx.guild.id, [])
     if not queue and not (ctx.voice_client and ctx.voice_client.is_playing()):
-        await ctx.send("Queue is empty.")
+        await send_message(ctx,"Queue is empty.")
         return
 
     embed = discord.Embed(title="Music Queue", color=discord.Color.blurple())
@@ -397,44 +408,44 @@ async def queue(ctx):
             desc += f"... and {len(queue) - 10} more."
         embed.add_field(name="Up Next", value=desc, inline=False)
 
-    await ctx.send(embed=embed)
+    await send_message(ctx,embed=embed)
 
 
 @bot.command(name="clear")
 async def clear(ctx):
     if ctx.guild.id in music_queues:
         music_queues[ctx.guild.id] = []
-    await ctx.send("Cleared the queue.")
+    await send_message(ctx,"Cleared the queue.")
 
 
 @bot.command()
 async def shuffle(ctx):
     if ctx.guild.id in music_queues:
         random.shuffle(music_queues[ctx.guild.id])
-    await ctx.send("Queue shuffled.")
+    await send_message(ctx,"Queue shuffled.")
 
 
 @bot.command(name="seek")
 async def seek(ctx, *, position: str):
     if not ctx.voice_client or not ctx.voice_client.is_playing():
-        await ctx.send("No song is currently playing.")
+        await send_message(ctx,"No song is currently playing.")
         return
 
     try:
         seconds = parse_time(position)
     except ValueError:
-        await ctx.send("Invalid time format. Use ss, mm:ss or hh:mm:ss.")
+        await send_message(ctx,"Invalid time format. Use ss, mm:ss or hh:mm:ss.")
         return
 
     current = ctx.voice_client.source
     if not hasattr(current, "data"):
-        await ctx.send("No metadata found for the current track.")
+        await send_message(ctx,"No metadata found for the current track.")
         return
 
     info = current.data
     duration = info.get("duration")
     if duration and seconds >= duration:
-        await ctx.send("Seek position is beyond track length.")
+        await send_message(ctx,"Seek position is beyond track length.")
         return
 
     # Stop current playback
@@ -457,29 +468,29 @@ async def seek(ctx, *, position: str):
     )
     ctx.voice_client.source = wrapped
 
-    await ctx.send(f"Seeked to {format_duration(seconds)} in **{info['title']}**")
+    await send_message(ctx,f"Seeked to {format_duration(seconds)} in **{info['title']}**")
 
 
 # Could refactor to use seek logic but for now just copying logic inside function
 @bot.command(name="chapter")
 async def chapter(ctx, number: int):
     if not ctx.voice_client or not ctx.voice_client.is_playing():
-        await ctx.send("No song is currently playing.")
+        await send_message(ctx,"No song is currently playing.")
         return
 
     current = ctx.voice_client.source
     if not hasattr(current, "data"):
-        await ctx.send("No metadata found for the current track.")
+        await send_message(ctx,"No metadata found for the current track.")
         return
 
     info = current.data
     chapters = info.get("chapters")
     if not chapters:
-        await ctx.send("This track has no chapter markers.")
+        await send_message(ctx,"This track has no chapter markers.")
         return
 
     if number < 1 or number > len(chapters):
-        await ctx.send(
+        await send_message(ctx,
             f"Invalid chapter number. This track has {len(chapters)} chapters."
         )
         return
@@ -507,7 +518,7 @@ async def chapter(ctx, number: int):
     )
     ctx.voice_client.source = wrapped
 
-    await ctx.send(
+    await send_message(ctx,
         f"Skipped to chapter {
             number}: **{ch.get('title', '(Untitled)')}** at {format_duration(start)}"
     )
@@ -516,18 +527,18 @@ async def chapter(ctx, number: int):
 @bot.command(name="chapters")
 async def chapters(ctx):
     if not ctx.voice_client or not ctx.voice_client.is_playing():
-        await ctx.send("No song is currently playing.")
+        await send_message(ctx,"No song is currently playing.")
         return
 
     current = ctx.voice_client.source
     if not hasattr(current, "data"):
-        await ctx.send("No metadata found for the current track.")
+        await send_message(ctx,"No metadata found for the current track.")
         return
 
     info = current.data
     chapters = info.get("chapters")
     if not chapters:
-        await ctx.send("This track has no chapter markers.")
+        await send_message(ctx,"This track has no chapter markers.")
         return
 
     lines = []
@@ -537,7 +548,7 @@ async def chapters(ctx):
         lines.append(f"**{i}.** [{format_duration(start)}] {title}")
 
     msg = "\n".join(lines)
-    await ctx.send(f"Chapters for **{info['title']}**:\n{msg}")
+    await send_message(ctx,f"Chapters for **{info['title']}**:\n{msg}")
 
 
 # -------------------- Run Bot --------------------
