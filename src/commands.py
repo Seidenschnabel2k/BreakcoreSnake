@@ -2,7 +2,7 @@ import random
 import asyncio
 import discord
 import time
-from src.music import get_player
+from src.music import get_player,ffmpeg_options
 from src.utils import (
     ensure_voice,
     make_track_embed,
@@ -10,10 +10,8 @@ from src.utils import (
     parse_time,
     format_duration,
     send_message,
+    TARGET_CHANNEL_ID,
 )
-
-from src.music import ffmpeg_options
-
 
 def setup(bot):
     @bot.command(name="tits")
@@ -156,3 +154,33 @@ def setup(bot):
             await ctx.send("I don't have permission to delete command messages.")
         except discord.HTTPException as e:
             await ctx.send(f"Failed to delete the command message: {e}")
+            
+    @bot.event
+    async def on_message(message: discord.Message):
+        prefix = bot.command_prefix
+        
+        if message.author.bot:
+            return
+
+        # only allow in target channel
+        if TARGET_CHANNEL_ID and message.channel.id != TARGET_CHANNEL_ID:
+            await bot.process_commands(message)
+            return
+       
+        if prefix and message.content.startswith(prefix):
+            await bot.process_commands(message)
+            return
+       
+        ctx = await bot.get_context(message)
+        try:
+            # call the play command callback directly, passing the message content as the query
+            await bot.get_command("p").callback(ctx, query=message.content)
+            try:
+                await message.delete()
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"Error handling autoplay message: {e}")
+
+        # Also allow the normal command processing in case the message contained a command.
+        await bot.process_commands(message)

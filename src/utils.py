@@ -2,7 +2,7 @@ import time
 import discord
 import os
 
-TARGET_CHANNEL_ID = os.getenv("DISCORD_CHANNEL_ID")
+TARGET_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID")) if os.getenv("DISCORD_CHANNEL_ID") else None
 
 def format_duration(seconds: int) -> str:
     if not seconds:
@@ -82,7 +82,7 @@ async def send_message(ctx, content=None, embed=None, view=None, suppress_embeds
     # Determine target channel
     channel = None
     if TARGET_CHANNEL_ID:
-        channel = ctx.guild.get_channel(int(TARGET_CHANNEL_ID))
+        channel = ctx.guild.get_channel(TARGET_CHANNEL_ID)
     if not channel:
         channel = ctx.channel
 
