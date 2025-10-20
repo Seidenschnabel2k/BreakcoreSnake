@@ -9,8 +9,9 @@ BreakcoreSnake is a feature-rich Discord music bot, developed in Python. The bot
 ## Features
 
 - Play music in voice channels
+- Priority queue
 - Queue and skip tracks
-- Pause, resume, and stop playback (WIP)
+- Pause, resume, and stop playback
 - Support for multiple audio sources (YouTube, etc.)
 - Easy-to-use commands
 
@@ -66,12 +67,13 @@ docker run --env DISCORD_TOKEN=your-token-here breakcoresnake
 
 - Cookies
 - Spotify function for Norman
-- Start/Stop function
-- History and Statistic function
-  - url, elapsed_time, genre/tags(if possible), requester, title, when_played (time, date),  release_date 
+
 
 ### Completed
 
+- ~~Start/Stop function~~
+- ~~History and Statistic function~~
+  - ~~url, elapsed_time, genre/tags(if possible), requester, title, when_played (time, date),  release_date~~
 - ~~Search without link~~
 - ~~Better Queue (Display thumbnail, hyperlink)~~
 - ~~Clear Queue Message (clean up)~~
