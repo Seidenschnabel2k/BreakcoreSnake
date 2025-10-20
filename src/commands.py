@@ -2,7 +2,7 @@ import random
 import asyncio
 import discord
 import time
-from src.music import get_player,ffmpeg_options
+from src.music import get_player, ffmpeg_options
 from src.utils import (
     ensure_voice,
     make_track_embed,
@@ -12,6 +12,7 @@ from src.utils import (
     send_message,
     TARGET_CHANNEL_ID,
 )
+
 
 def setup(bot):
     @bot.command(name="tits")
@@ -28,14 +29,36 @@ def setup(bot):
 
     @bot.command(name="p")
     async def play(ctx, *, query):
+        index = None
+        query = query.strip()
+
+        # Split first word (could be an index)
+        parts = query.split(maxsplit=1)
+        first = parts[0]
+
+        try:
+            index = int(first)
+            if len(parts) == 1:
+                return await send_message(
+                    ctx, "Please provide a search query after the index."
+                )
+            query = parts[1].strip()
+        except ValueError:
+            pass
+
         vc = await ensure_voice(ctx)
         if not vc:
             return
         player = get_player(ctx.guild)
-        infos, skipped = await player.add_track(query, ctx.author, playlist=False)
+        if index is not None:
+            if index > len(player.queue):
+                return await send_message(ctx, "Index bigger than queue length.")
+        infos, skipped = await player.add_track(
+            query, ctx.author, playlist=False, index=index
+        )
         if not vc.is_playing():
             await player.play_next(interactor=ctx.author, bot=bot)
-        embed = make_track_embed(infos[0], ctx.author)
+        embed = make_track_embed(infos[0], ctx.author, title=f"Add at Position {index +1} of Queue" if index is not None else "Add to Queue")
         await send_message(ctx, embed=embed)
         for track in skipped:
             await send_message(ctx, f"**{track['title']}** is already in the queue!")
@@ -59,12 +82,13 @@ def setup(bot):
         if not vc:
             return
         player = get_player(ctx.guild)
-        infos, skipped = await player.add_track(query, ctx.author, playlist=False)
-        player.queue.insert(0, infos[0])
+        infos, skipped = await player.add_track(
+            query, ctx.author, playlist=False, prio=True
+        )
         if not vc.is_playing():
             await player.play_next(interactor=ctx.author, bot=bot)
         else:
-            embed = make_track_embed(infos[0], ctx.author)
+            embed = make_track_embed(infos[0], ctx.author, title="Added to Priority Queue")
             await send_message(ctx, embed=embed)
         for track in skipped:
             await send_message(ctx, f"**{track['title']}** is already in the queue!")
@@ -80,10 +104,25 @@ def setup(bot):
         await send_message(ctx, embed=embed)
 
     @bot.command(name="s")
-    async def skip(ctx):
-        if ctx.voice_client and ctx.voice_client.is_playing():
-            ctx.voice_client.stop()
-            await send_message(ctx, "Skipped current track.")
+    async def skip(ctx, index: int = 0):
+        player = get_player(ctx.guild)
+        vc = ctx.voice_client
+
+        if not vc or not vc.is_playing():
+            return await send_message(ctx, "Nothing is playing right now.")
+
+        if index == 0:
+            vc.stop()
+
+            await player.play_next(interactor=ctx.author, bot=bot)
+            
+            await send_message(ctx, f"Skipped **{player.current['title']}** track.")
+            
+        else:
+            if index > len(player.queue):
+                return await send_message(ctx, "Index bigger than queue length.")
+            skipped_track = player.queue.pop(index - 1)
+            await send_message(ctx, f"Skipped **{skipped_track['title']}** from the queue.")
 
     @bot.command(name="stop")
     async def stop(ctx):
@@ -91,6 +130,22 @@ def setup(bot):
             get_player(ctx.guild).clear()
             ctx.voice_client.stop()
             await send_message(ctx, "Stopped and cleared the queue.")
+            
+    @bot.command(name="pause")
+    async def toggle_pause(ctx):
+        player = get_player(ctx.guild)
+        vc = ctx.voice_client
+        if not vc:
+            return await send_message(ctx, "I'm not connected to a voice channel.")
+
+        if vc.is_playing():
+            vc.pause()
+            await send_message(ctx, f"Paused **{player.current['title']}**.")
+        elif vc.is_paused():
+            vc.resume()
+            await send_message(ctx, f"Resumed **{player.current['title']}**.")
+        else:
+            await send_message(ctx, "Nothing is currently playing.")
 
     @bot.command(name="clear")
     async def clear(ctx):
@@ -110,7 +165,9 @@ def setup(bot):
         try:
             seconds = parse_time(position)
         except ValueError:
-            return await send_message(ctx, "Invalid time format. Use ss, mm:ss or hh:mm:ss.")
+            return await send_message(
+                ctx, "Invalid time format. Use ss, mm:ss or hh:mm:ss."
+            )
         current = ctx.voice_client.source
         # if not hasattr(current, "data"):
         #     return await send_message(ctx, "No metadata found for the current track.")
@@ -136,8 +193,10 @@ def setup(bot):
             ),
         )
         ctx.voice_client.source = wrapped
-        await send_message(ctx, f"Seeked to {format_duration(seconds)} in **{info['title']}**")
-        
+        await send_message(
+            ctx, f"Seeked to {format_duration(seconds)} in **{info['title']}**"
+        )
+
     @bot.event
     async def on_command_error(ctx, error):
         print(f"Error in command {ctx.command}: {error}")
@@ -154,11 +213,11 @@ def setup(bot):
             await ctx.send("I don't have permission to delete command messages.")
         except discord.HTTPException as e:
             await ctx.send(f"Failed to delete the command message: {e}")
-            
+
     @bot.event
     async def on_message(message: discord.Message):
         prefix = bot.command_prefix
-        
+
         if message.author.bot:
             return
 
@@ -166,11 +225,11 @@ def setup(bot):
         if TARGET_CHANNEL_ID and message.channel.id != TARGET_CHANNEL_ID:
             await bot.process_commands(message)
             return
-       
+
         if prefix and message.content.startswith(prefix):
             await bot.process_commands(message)
             return
-       
+
         ctx = await bot.get_context(message)
         try:
             # call the play command callback directly, passing the message content as the query

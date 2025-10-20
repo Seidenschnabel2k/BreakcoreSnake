@@ -37,18 +37,18 @@ def parse_time(input_str: str) -> int:
         return h * 3600 + m * 60 + s
     raise ValueError("Invalid time format. Use ss, mm:ss or hh:mm:ss.")
 
-def make_track_embed(info, requester):
+def make_track_embed(info, requester, title="Added to Queue"):
     embed = discord.Embed(
-        title="Added to Queue",
+        title=title,
         description=f"[{info['title']}]({info.get('webpage_url','')})\nRequested by: {requester.mention}",
-        color=discord.Color.blurple()
+        color=discord.Color.red()
     )
     if info.get("thumbnail"):
         embed.set_thumbnail(url=info["thumbnail"])
     return embed
 
 def make_queue_embed(player):
-    embed = discord.Embed(title="Music Queue", color=discord.Color.blurple())
+    embed = discord.Embed(title="Music Queue", color=discord.Color.dark_red())
     if player.current:
         dur = player.current.get("duration")
         progress = format_progress(player.start_time, dur) if player.start_time else format_duration(dur)
@@ -59,13 +59,20 @@ def make_queue_embed(player):
         )
         if player.current.get("thumbnail"):
             embed.set_image(url=player.current["thumbnail"])
+    if player.now_queue:        
+        desc = ""
+        for i, track in enumerate(player.now_queue[:10]):
+            desc += f"{i+1}. [{track['title']}]({track.get('webpage_url','')}) ({format_duration(track.get('duration'))}) | By: {track.get('requester').mention}\n"
+        if len(player.now_queue) > 10:
+            desc += f"... and {len(player.now_queue)-10} more."
+        embed.add_field(name="-------------------------- **Priority** --------------------------", value=desc, inline=False)
     if player.queue:
         desc = ""
         for i, track in enumerate(player.queue[:10]):
-            desc += f"{i+1}. [{track['title']}]({track.get('webpage_url','')}) ({format_duration(track.get('duration'))}) | By: {track.get('requester')}\n"
+            desc += f"{i+ len(player.now_queue) +1}. [{track['title']}]({track.get('webpage_url','')}) ({format_duration(track.get('duration'))}) | By: {track.get('requester').mention}\n"
         if len(player.queue) > 10:
             desc += f"... and {len(player.queue)-10} more."
-        embed.add_field(name="Up Next", value=desc, inline=False)
+        embed.add_field(name="------------------------ **Non-Priority** ------------------------", value=desc, inline=False)
     return embed
 
 async def ensure_voice(ctx):
@@ -88,18 +95,12 @@ async def send_message(ctx, content=None, embed=None, view=None, suppress_embeds
 
     await channel.send(content=content, embed=embed, view=view, suppress_embeds=suppress_embeds)
     
-def is_duplicate(track, queue):
-    """
-    Check if a track is already in the queue.
-
-    Args:
-        track (dict): Track info, must contain 'url'.
-        queue (list): List of track dicts.
-
-    Returns:
-        bool: True if duplicate exists, False otherwise.
-    """
+def is_duplicate(track, queues):
     track_url = track.get("webpage_url")
     if not track_url:
-        return False  # cannot check without URL
-    return any(item.get("webpage_url") == track_url for item in queue)
+        return False
+    return any(
+        item.get("webpage_url") == track_url
+        for queue in queues
+        for item in queue
+    )
