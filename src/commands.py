@@ -280,6 +280,16 @@ def setup(bot):
             return await send_message(ctx, "No available commands.")
         await send_message(ctx, embed=embed)
 
+    @bot.command(name="clearbot")
+    async def clearbot(ctx, limit: int = 1000):
+        """Delete this bot's messages in the current channel (owner only). Usage: clearbot [limit]"""
+        if not await bot.is_owner(ctx.author):
+            return await send_message(ctx, "You are not the bot owner.")
+        def _is_bot(m: discord.Message):
+            return m.author == bot.user
+        deleted = await ctx.channel.purge(limit=limit, check=_is_bot)
+        await send_message(ctx, f"Deleted {len(deleted)} bot messages from this channel.")
+
     @bot.event
     async def on_command_error(ctx, error):
         print(f"Error in command {ctx.command}: {error}")
