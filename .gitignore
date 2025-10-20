@@ -3,3 +3,12 @@
 
 # deply script
 ./deploy.sh
+
+# Python cache files
+__pycache__/
+
+# VSCode settings
+.vscode/
+
+# Logs
+log/
