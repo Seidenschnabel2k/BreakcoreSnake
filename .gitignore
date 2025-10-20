@@ -4,8 +4,11 @@
 # deply script
 ./deploy.sh
 
-# parquet
-log/*.parquet
-
-# Python cache
+# Python cache files
 __pycache__/
+
+# VSCode settings
+.vscode/
+
+# Logs
+log/

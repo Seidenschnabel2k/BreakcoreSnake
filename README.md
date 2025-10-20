@@ -37,7 +37,7 @@ pip install -r requirements.txt
 
 ## Usage
 
-1. Rename `.env.example` to `.env` and insert your Discord bot token:
+1. Rename `example.env` to `.env` and insert your Discord bot token:
 
     ```
     DISCORD_TOKEN=your-token-here

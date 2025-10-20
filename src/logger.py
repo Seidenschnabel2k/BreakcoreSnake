@@ -73,5 +73,5 @@ if __name__ == "__main__":
     # Load the Parquet file into a DataFrame
     df = pd.read_parquet(log_file)
 
-    # Display the first few rows
+    # Display the last few rows
     print(df.tail())
