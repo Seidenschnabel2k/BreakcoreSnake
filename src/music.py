@@ -9,7 +9,7 @@ logger = Logger()
 
 ffmpeg_options = {
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
-    "options": "-vn",
+    "options": "-vn -bufsize 96k",
 }
 ytdl_format_options = {
     "format": "bestaudio/best",
@@ -32,6 +32,7 @@ class MusicPlayer:
         self.now_queue = []
         self.current = None
         self.start_time = None
+        self.paused_offset = None
 
     async def add_track(self, query, requester, playlist=False, index: int = None, prio = False):
         skipped_tracks = []
@@ -69,6 +70,7 @@ class MusicPlayer:
         else:
             self.current = self.queue.pop(0)
         self.start_time = time.time()
+        self.paused_offset = None
         source = discord.FFmpegPCMAudio(self.current["url"], **ffmpeg_options)
         wrapped = discord.PCMVolumeTransformer(source, volume=0.5)
         wrapped.data = self.current

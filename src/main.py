@@ -14,7 +14,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 PREFIX = "~" if DEBUG else "!"
 
-bot = commands.Bot(command_prefix=PREFIX, intents=intents)
+bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
 
 music_commands.setup(bot)
 

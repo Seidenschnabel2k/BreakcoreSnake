@@ -9,7 +9,10 @@ def format_duration(seconds: int) -> str:
         return "Live"
     m, s = divmod(seconds, 60)
     h, m = divmod(m, 60)
-    return f"{h}:{m:02}:{s:02}" if h else f"{m}:{s:02}"
+    if h:
+        return f"{h:.0f}:{m:02.0f}:{s:02.0f}"
+    else:
+        return f"{m:02.0f}:{s:02.0f}"
 
 def format_progress(start_time: float, total: int) -> str:
     if total is None:
@@ -22,8 +25,8 @@ def format_progress(start_time: float, total: int) -> str:
     tm, ts = divmod(total, 60)
     th, tm = divmod(tm, 60)
     if th:
-        return f"{eh}:{em:02}:{es:02} / {th}:{tm:02}:{ts:02}"
-    return f"{em}:{es:02} / {tm}:{ts:02}"
+        return f"{eh:.0f}:{em:02.0f}:{es:02.0f} / {th}:{tm:02.0f}:{ts:02.0f}"
+    return f"{em:.0f}:{es:02.0f} / {tm:.0f}:{ts:02.0f}"
 
 def parse_time(input_str: str) -> int:
     parts = input_str.strip().split(":")
@@ -41,7 +44,7 @@ def make_track_embed(info, requester, title="Added to Queue"):
     embed = discord.Embed(
         title=title,
         description=f"[{info['title']}]({info.get('webpage_url','')})\nRequested by: {requester.mention}",
-        color=discord.Color.red()
+        color=discord.Color.dark_red()
     )
     if info.get("thumbnail"):
         embed.set_thumbnail(url=info["thumbnail"])
@@ -65,14 +68,14 @@ def make_queue_embed(player):
             desc += f"{i+1}. [{track['title']}]({track.get('webpage_url','')}) ({format_duration(track.get('duration'))}) | By: {track.get('requester').mention}\n"
         if len(player.now_queue) > 10:
             desc += f"... and {len(player.now_queue)-10} more."
-        embed.add_field(name="-------------------------- **Priority** --------------------------", value=desc, inline=False)
+        embed.add_field(name="-------------------- **Priority** --------------------", value=desc, inline=False)
     if player.queue:
         desc = ""
         for i, track in enumerate(player.queue[:10]):
             desc += f"{i+ len(player.now_queue) +1}. [{track['title']}]({track.get('webpage_url','')}) ({format_duration(track.get('duration'))}) | By: {track.get('requester').mention}\n"
         if len(player.queue) > 10:
             desc += f"... and {len(player.queue)-10} more."
-        embed.add_field(name="------------------------ **Non-Priority** ------------------------", value=desc, inline=False)
+        embed.add_field(name="------------------ **Non-Priority** ------------------", value=desc, inline=False)
     return embed
 
 async def ensure_voice(ctx):
