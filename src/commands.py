@@ -281,7 +281,7 @@ def setup(bot):
         await send_message(ctx, embed=embed)
 
     @bot.command(name="clearbot")
-    async def clearbot(ctx, limit: int = 1000):
+    async def clearbot(ctx, limit: int = 10):
         """Delete this bot's messages in the current channel (owner only). Usage: clearbot [limit]"""
         if not await bot.is_owner(ctx.author):
             return await send_message(ctx, "You are not the bot owner.")
@@ -325,12 +325,13 @@ def setup(bot):
 
         ctx = await bot.get_context(message)
         try:
-            # call the play command callback directly, passing the message content as the query
-            await bot.get_command("p").callback(ctx, query=message.content)
             try:
                 await message.delete()
             except Exception:
                 pass
+            # call the play command callback directly, passing the message content as the query
+            await bot.get_command("p").callback(ctx, query=message.content)
+
         except Exception as e:
             print(f"Error handling autoplay message: {e}")
 
