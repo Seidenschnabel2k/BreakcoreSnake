@@ -64,17 +64,17 @@ def make_queue_embed(player):
             embed.set_image(url=player.current["thumbnail"])
     if player.now_queue:        
         desc = ""
-        for i, track in enumerate(player.now_queue[:10]):
+        for i, track in enumerate(player.now_queue[:7]):
             desc += f"{i+1}. [{track['title']}]({track.get('webpage_url','')}) ({format_duration(track.get('duration'))}) | By: {track.get('requester').mention}\n"
-        if len(player.now_queue) > 10:
-            desc += f"... and {len(player.now_queue)-10} more."
+        if len(player.now_queue) > 7:
+            desc += f"... and {len(player.now_queue)-7} more."
         embed.add_field(name="-------------------- **Priority** --------------------", value=desc, inline=False)
     if player.queue:
         desc = ""
-        for i, track in enumerate(player.queue[:10]):
-            desc += f"{i+ len(player.now_queue) +1}. [{track['title']}]({track.get('webpage_url','')}) ({format_duration(track.get('duration'))}) | By: {track.get('requester').mention}\n"
-        if len(player.queue) > 10:
-            desc += f"... and {len(player.queue)-10} more."
+        for i, track in enumerate(player.queue[:8]):
+            desc += f"{i+ len(player.now_queue) + 1}. [{track['title']}]({track.get('webpage_url','')}) ({format_duration(track.get('duration'))}) | By: {track.get('requester').mention}\n"
+        if len(player.queue) > 8:
+            desc += f"... and {len(player.queue)-8} more."
         embed.add_field(name="------------------ **Non-Priority** ------------------", value=desc, inline=False)
     return embed
 

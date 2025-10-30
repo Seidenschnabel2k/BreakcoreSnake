@@ -2,8 +2,8 @@ import time
 import asyncio
 import discord
 import yt_dlp as youtube_dl
-from src.logger import Logger
-from src.utils import is_duplicate
+from logger import Logger
+from utils import is_duplicate
 
 logger = Logger()
 
@@ -12,14 +12,14 @@ ffmpeg_options = {
     "options": "-vn -bufsize 96k",
 }
 ytdl_format_options = {
-    "format": "bestaudio/best",
+    "format": "m4a/bestaudio/best",
     "noplaylist": True,
     "quiet": True,
     "default_search": "auto",
     "prefer_ffmpeg": True,
     "geo_bypass": True,
 }
-playlist_ytdl_options = {**ytdl_format_options, "noplaylist": False, "ignoreerrors": True}
+playlist_ytdl_options = {**ytdl_format_options, "noplaylist": False, "ignoreerrors": True, "playlist_items": "1-50",}
 
 ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 pl_ytdl = youtube_dl.YoutubeDL(playlist_ytdl_options)
@@ -43,7 +43,7 @@ class MusicPlayer:
         infos = data["entries"] if "entries" in data else [data]
         for info in infos:
             if is_duplicate(info, [self.queue, self.now_queue]):
-                skipped_tracks.insert(index, info)
+                skipped_tracks.append(info)
                 continue
             info["requester"] = requester
             if prio:
@@ -56,8 +56,8 @@ class MusicPlayer:
         return infos, skipped_tracks
 
     async def play_next(self, interactor=None, bot=None):
-        if not self.queue or self.now_queue:
-            await bot.change_presence(activity=None)
+        if not (self.queue or self.now_queue):
+            await bot.change_presence(status=discord.Status.idle)
             return
         vc = self.guild.voice_client
         if not vc:
@@ -88,6 +88,7 @@ class MusicPlayer:
         )
 
     def clear(self):
+        self.now_queue.clear()
         self.queue.clear()
 
 

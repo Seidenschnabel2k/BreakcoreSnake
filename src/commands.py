@@ -2,8 +2,8 @@ import random
 import asyncio
 import discord
 import time
-from src.music import get_player, ffmpeg_options
-from src.utils import (
+from music import get_player, ffmpeg_options
+from utils import (
     ensure_voice,
     make_track_embed,
     make_queue_embed,
@@ -31,36 +31,19 @@ def setup(bot):
 
     @bot.command(name="p")
     async def play(ctx, *, query):
-        """Add a track to the queue. Usage: p [index] <query>"""
-        index = None
+        """Add a track to the queue. Usage: p <query>"""
         query = query.strip()
-
-        # Split first word (could be an index)
-        parts = query.split(maxsplit=1)
-        first = parts[0]
-
-        try:
-            index = int(first)
-            if len(parts) == 1:
-                return await send_message(
-                    ctx, "Please provide a search query after the index."
-                )
-            query = parts[1].strip()
-        except ValueError:
-            pass
 
         vc = await ensure_voice(ctx)
         if not vc:
             return
         player = get_player(ctx.guild)
-        if index is not None:
-            if index > len(player.queue):
-                return await send_message(ctx, "Index bigger than queue length.")
+
         infos, skipped = await player.add_track(
-            query, ctx.author, playlist=False, index=index
+            query, ctx.author, playlist=False
         )
 
-        embed = make_track_embed(infos[0], ctx.author, title=f"Add at Position {index + 1} of Queue" if index is not None else "Add to Queue")
+        embed = make_track_embed(infos[0], ctx.author, title="Add to Queue")
         # If the VC is paused, don't resume or start playback — just add to queue.
         if vc.is_paused():
             embed.add_field(name="Note", value="Playback is currently paused.")
@@ -78,7 +61,9 @@ def setup(bot):
         if not vc:
             return
         player = get_player(ctx.guild)
-        infos, skipped = await player.add_track(query, ctx.author, playlist=True)
+        async with ctx.typing():
+            await send_message(ctx, "Processing playlist... This may take a moment.")
+            infos, skipped = await player.add_track(query, ctx.author, playlist=True)
 
         # If paused, don't resume — just add playlist to queue.
         if vc.is_paused():
@@ -109,6 +94,7 @@ def setup(bot):
             embed.add_field(name="Note", value="Playback is currently paused.")
         elif not vc.is_playing():
             await player.play_next(interactor=ctx.author, bot=bot)
+            await send_message(ctx, embed=embed)
         else:
             await send_message(ctx, embed=embed)
 
@@ -141,7 +127,7 @@ def setup(bot):
         if index == 0:
             vc.stop()
 
-            await player.play_next(interactor=ctx.author, bot=bot)
+            # await player.play_next(interactor=ctx.author, bot=bot)
             
             await send_message(ctx, f"Skipped **{player.current['title']}** track.")
             
@@ -289,6 +275,15 @@ def setup(bot):
             return m.author == bot.user
         deleted = await ctx.channel.purge(limit=limit, check=_is_bot)
         await send_message(ctx, f"Deleted {len(deleted)} bot messages from this channel.")
+        
+        
+        
+    @bot.command(name="ifuckedup")
+    async def restart(ctx):
+        """A command to restart the bot. Usage: ifuckedup"""
+        import sys
+        await send_message(ctx, "Yes, you definitely fucked up.")
+        sys.exit(0)
 
     @bot.event
     async def on_command_error(ctx, error):

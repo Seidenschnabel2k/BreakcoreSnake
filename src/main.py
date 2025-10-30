@@ -2,7 +2,7 @@ import os
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
-import src.commands as music_commands
+import commands as music_commands
 
 load_dotenv()
 
