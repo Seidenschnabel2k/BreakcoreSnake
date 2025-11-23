@@ -12,12 +12,17 @@ ffmpeg_options = {
     "options": "-vn -bufsize 96k",
 }
 ytdl_format_options = {
-    "format": "m4a/bestaudio/best",
+    "format": "bestaudio[ext=m4a]/bestaudio/best",
     "noplaylist": True,
     "quiet": True,
     "default_search": "auto",
     "prefer_ffmpeg": True,
     "geo_bypass": True,
+
+    "retries": 10,
+    "fragment_retries": 10,
+    "extractor_retries": 3,
+    "skip_unavailable_fragments": True,
 }
 playlist_ytdl_options = {**ytdl_format_options, "noplaylist": False, "ignoreerrors": True, "playlist_items": "1-50",}
 
