@@ -9,7 +9,7 @@ logger = Logger()
 
 ffmpeg_options = {
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
-    "options": "-vn -bufsize 96k",
+    "options": "-vn -bufsize 512k",
 }
 ytdl_format_options = {
     "format": "bestaudio[ext=m4a]/bestaudio/best",
