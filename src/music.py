@@ -12,7 +12,7 @@ ffmpeg_options = {
     "options": "-vn -bufsize 512k",
 }
 ytdl_format_options = {
-    "format": "bestaudio[ext=m4a]/bestaudio/best",
+    "format": r"bestaudio[ext=m4a]/bestaudio[protocol^=http]/bestaudio/best",
     "noplaylist": True,
     "quiet": True,
     "default_search": "auto",
@@ -24,7 +24,8 @@ ytdl_format_options = {
     "extractor_retries": 3,
     "skip_unavailable_fragments": True,
 }
-playlist_ytdl_options = {**ytdl_format_options, "noplaylist": False, "ignoreerrors": True, "playlist_items": "1-50",}
+playlist_ytdl_options = {**ytdl_format_options, "noplaylist": False,
+                         "ignoreerrors": True, "playlist_items": "1-50", }
 
 ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 pl_ytdl = youtube_dl.YoutubeDL(playlist_ytdl_options)
@@ -39,9 +40,9 @@ class MusicPlayer:
         self.start_time = None
         self.paused_offset = None
 
-    async def add_track(self, query, requester, playlist=False, index: int = None, prio = False):
+    async def add_track(self, query, requester, playlist=False, index: int = None, prio=False):
         skipped_tracks = []
-        
+
         loop = asyncio.get_event_loop()
         extractor = pl_ytdl if playlist else ytdl
         data = await loop.run_in_executor(None, lambda: extractor.extract_info(query, download=False))
@@ -84,12 +85,14 @@ class MusicPlayer:
         def after_play(err):
             if err:
                 print(f"Playback error: {err}")
-            asyncio.run_coroutine_threadsafe(self.play_next(interactor, bot), bot.loop)
+            asyncio.run_coroutine_threadsafe(
+                self.play_next(interactor, bot), bot.loop)
 
         vc.play(wrapped, after=after_play)
         vc.source = wrapped
         await bot.change_presence(
-            activity=discord.Activity(type=discord.ActivityType.listening, name=self.current['title'])
+            activity=discord.Activity(
+                type=discord.ActivityType.listening, name=self.current['title'])
         )
 
     def clear(self):
@@ -98,6 +101,8 @@ class MusicPlayer:
 
 
 players = {}
+
+
 def get_player(guild):
     if guild.id not in players:
         players[guild.id] = MusicPlayer(guild)
