@@ -2,7 +2,7 @@ import random
 import asyncio
 import discord
 import time
-from music import get_player, ffmpeg_options
+from music import get_player, FFMPEG_OPTIONS, YTDLSource
 from utils import (
     ensure_voice,
     make_track_embed,
@@ -191,43 +191,61 @@ def setup(bot):
 
     @bot.command(name="seek")
     async def seek(ctx, *, position: str):
-        """Seek to a position in the current track. Use ss, mm:ss or hh:mm:ss."""
-        if not ctx.voice_client or not ctx.voice_client.is_playing():
+        """Seek to a position in the current track."""
+        vc = ctx.voice_client
+
+        if not vc or not vc.is_playing():
             return await send_message(ctx, "No song is currently playing.")
+
         try:
             seconds = parse_time(position)
         except ValueError:
-            return await send_message(
-                ctx, "Invalid time format. Use ss, mm:ss or hh:mm:ss."
-            )
-        current = ctx.voice_client.source
-        # if not hasattr(current, "data"):
-        #     return await send_message(ctx, "No metadata found for the current track.")
+            return await send_message(ctx, "Invalid time format. Use ss, mm:ss or hh:mm:ss.")
+
+        current = vc.source
         info = current.data
         duration = info.get("duration")
+
         if duration and seconds >= duration:
             return await send_message(ctx, "Seek position is beyond track length.")
 
-        ctx.voice_client.stop()
+        vc.stop()
 
-        seek_opts = ffmpeg_options.copy()
-        seek_opts["before_options"] = (
-            f"-ss {seconds} -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
+        fresh_source = await YTDLSource.from_url(
+            info["webpage_url"], loop=bot.loop, stream=True
         )
-        source = discord.FFmpegPCMAudio(info["url"], **seek_opts)
-        wrapped = discord.PCMVolumeTransformer(source, volume=0.5)
-        wrapped.data = info
+
+        fresh_info = fresh_source.data
+        real_url = fresh_info["url"]
+
+        seek_opts = FFMPEG_OPTIONS.copy()
+        seek_opts = {
+            "before_options": (
+                "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
+            ),
+            "options": f"-vn -ss {seconds}"
+}
+
+        # FFmpeg source using fresh URL
+        source = discord.FFmpegPCMAudio(real_url, **seek_opts)
+
+        wrapped = discord.PCMVolumeTransformer(source, volume=current.volume)
+        wrapped.data = fresh_info
         wrapped.start_time = time.time() - seconds
-        ctx.voice_client.play(
+
+        vc.play(
             wrapped,
             after=lambda e: asyncio.run_coroutine_threadsafe(
                 get_player(ctx.guild).play_next(ctx.author, bot=bot), bot.loop
             ),
         )
-        ctx.voice_client.source = wrapped
+
+        vc.source = wrapped
+
         await send_message(
-            ctx, f"Seeked to {format_duration(seconds)} in **{info['title']}**"
+            ctx, f"Seeked to {format_duration(seconds)} in **{fresh_info['title']}**"
         )
+
 
     @bot.command(name="h")
     async def help(ctx, *, command_name: str = None):
