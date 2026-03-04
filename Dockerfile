@@ -1,7 +1,9 @@
 FROM python:3.14-slim
 
 # Install ffmpeg
-RUN apt update && apt install -y ffmpeg && apt clean
+RUN apt update && apt install -y ffmpeg curl unzip && apt clean
+ENV DENO_INSTALL=/usr/local
+RUN curl -fsSL https://deno.land/x/install/install.sh | sh
 
 # Set work directory
 WORKDIR /app
