@@ -64,17 +64,25 @@ def make_queue_embed(player):
             embed.set_image(url=player.current["thumbnail"])
     if player.now_queue:        
         desc = ""
-        for i, track in enumerate(player.now_queue[:7]):
-            desc += f"{i+1}. [{track['title']}]({track.get('webpage_url','')}) ({format_duration(track.get('duration'))}) | By: {track.get('requester').mention}\n"
-        if len(player.now_queue) > 7:
-            desc += f"... and {len(player.now_queue)-7} more."
+        for i, track in enumerate(player.now_queue):
+            line = f"{i+1}. [{track['title']}]({track.get('webpage_url','')}) ({format_duration(track.get('duration'))}) | By: {track.get('requester').mention}\n"
+            # Stop adding if we're approaching the 1024 limit
+            if len(desc) + len(line) > 1000:
+                remaining = len(player.now_queue) - i
+                desc += f"... and {remaining} more."
+                break
+            desc += line
         embed.add_field(name="-------------------- **Priority** --------------------", value=desc, inline=False)
     if player.queue:
         desc = ""
-        for i, track in enumerate(player.queue[:8]):
-            desc += f"{i+ len(player.now_queue) + 1}. [{track['title']}]({track.get('webpage_url','')}) ({format_duration(track.get('duration'))}) | By: {track.get('requester').mention}\n"
-        if len(player.queue) > 8:
-            desc += f"... and {len(player.queue)-8} more."
+        for i, track in enumerate(player.queue):
+            line = f"{i + len(player.now_queue) + 1}. [{track['title']}]({track.get('webpage_url','')}) ({format_duration(track.get('duration'))}) | By: {track.get('requester').mention}\n"
+            # Stop adding if we're approaching the 1024 limit
+            if len(desc) + len(line) > 1000:
+                remaining = len(player.queue) - i
+                desc += f"... and {remaining} more."
+                break
+            desc += line
         embed.add_field(name="------------------ **Non-Priority** ------------------", value=desc, inline=False)
     return embed
 

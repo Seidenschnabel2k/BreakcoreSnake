@@ -1,8 +1,11 @@
 import random
 import asyncio
 import discord
+from discord.ext import commands
 import time
+from datetime import datetime, timedelta
 from music import get_player, FFMPEG_OPTIONS, YTDLSource
+from analytics import Analytics
 from utils import (
     ensure_voice,
     make_track_embed,
@@ -65,14 +68,30 @@ def setup(bot):
             await send_message(ctx, "Processing playlist... This may take a moment.")
             infos, skipped = await player.add_track(query, ctx.author, playlist=True)
 
+        # Get playlist URL from first track if available
+        playlist_url = None
+        if infos and infos[0].get("webpage_url"):
+            # Extract playlist ID from the URL if it's a playlist
+            url = infos[0].get("webpage_url", "")
+            if "playlist" in url:
+                playlist_url = url.split("&index=")[0] if "&index=" in url else url
+
+        message = f"Added playlist with {len(infos)} tracks"
+        if playlist_url:
+            message += f"\n{playlist_url}"
+        if vc.is_paused():
+            message += " (playback is paused)."
+        else:
+            message += "."
+
         # If paused, don't resume — just add playlist to queue.
         if vc.is_paused():
-            await send_message(ctx, f"Added playlist with {len(infos)} tracks (playback is paused).")
+            await send_message(ctx, message)
         elif not vc.is_playing():
             await player.play_next(interactor=ctx.author, bot=bot)
-            await send_message(ctx, f"Added playlist with {len(infos)} tracks.")
+            await send_message(ctx, message)
         else:
-            await send_message(ctx, f"Added playlist with {len(infos)} tracks.")
+            await send_message(ctx, message)
 
         for track in skipped:
             await send_message(ctx, f"**{track['title']}** is already in the queue!")
@@ -296,7 +315,200 @@ def setup(bot):
         
         
         
+    @bot.command(name="wrap")
+    async def music_wrap(ctx, timeframe: str = "all", user: discord.User = None):
+        """Generate a music wrap with analytics and metrics. Usage: wrap [all|month|year] [@user]"""
+        await ctx.typing()
+        
+        try:
+            # Parse timeframe
+            start_date = None
+            end_date = datetime.now()
+            timeframe_display = "All Time"
+            
+            if timeframe.lower() == "month":
+                start_date = end_date - timedelta(days=30)
+                timeframe_display = "Last 30 Days"
+            elif timeframe.lower() == "year":
+                start_date = end_date - timedelta(days=365)
+                timeframe_display = "Last Year"
+            elif timeframe.lower() != "all":
+                # Check if first arg is a user mention
+                if timeframe.startswith("<@"):
+                    # It's actually a user, not a timeframe
+                    user = await commands.UserConverter().convert(ctx, timeframe)
+                    timeframe = "all"
+                    timeframe_display = "All Time"
+            
+            # Clean up old images before generating new ones
+            Analytics.cleanup_old_images()
+            
+            # Create analytics instance with time filters
+            analytics = Analytics(start_date=start_date, end_date=end_date)
+            
+            if analytics.is_empty():
+                return await send_message(ctx, f"No music data available for {timeframe_display.lower()}. Start queuing songs!")
+
+            async def resolve_user_name(user_id: int) -> str:
+                member = ctx.guild.get_member(user_id) if ctx.guild else None
+                if member:
+                    return member.display_name
+
+                cached_user = bot.get_user(user_id)
+                if cached_user:
+                    return cached_user.name
+
+                try:
+                    fetched_user = await bot.fetch_user(user_id)
+                    return fetched_user.name
+                except Exception:
+                    return f"User {user_id}"
+            
+            # If user specified, show user-specific wrap
+            if user:
+                user_stats = analytics.get_user_stats(user.id)
+                if not user_stats:
+                    return await send_message(ctx, f"No data available for {user.mention}")
+                
+                # Generate user summary image
+                await send_message(ctx, f"Generating wrap for {user.mention}...")
+                summary_path = analytics.create_user_summary(user.id, user_name=user.name)
+                
+                # Create embed with user stats
+                embed = discord.Embed(
+                    title=f"Music Wrap - {user.name} ({timeframe_display})",
+                    color=discord.Color.purple(),
+                    description="Here's your personalized music wrap!"
+                )
+                
+                total_hours = user_stats['total_duration'] / 3600
+                embed.add_field(name="Total Songs", value=f"{user_stats['total_songs']}", inline=True)
+                embed.add_field(name="Total Duration", value=f"{total_hours:.1f} hours", inline=True)
+                embed.add_field(name="Top Genre", 
+                              value=next(iter(user_stats['top_genres'].keys())) if user_stats['top_genres'] else "Unknown", 
+                              inline=True)
+                
+                if user_stats['top_genres']:
+                    genres_str = "\n".join([f"{g}: {c}" for g, c in list(user_stats['top_genres'].items())[:5]])
+                    embed.add_field(name="Top Genres", value=genres_str, inline=False)
+                
+                if user_stats['top_songs']:
+                    songs_str = "\n".join([f"{s}: {c}" for s, c in list(user_stats['top_songs'].items())[:5]])
+                    embed.add_field(name="Top Songs", value=songs_str, inline=False)
+                
+                # Send summary image
+                await send_message(ctx, embed=embed)
+                try:
+                    with open(summary_path, 'rb') as f:
+                        await ctx.channel.send(file=discord.File(f, filename="user_wrap.png"))
+                except Exception as e:
+                    print(f"Error sending user wrap image: {e}")
+                    
+            else:
+                # Server-wide wrap
+                await send_message(ctx, "Generating server-wide wrap... This may take a moment.")
+
+                requester_ids = [int(uid) for uid in analytics.df['requester_id'].dropna().unique().tolist()]
+                user_name_map = {}
+                for requester_id in requester_ids:
+                    user_name_map[requester_id] = await resolve_user_name(requester_id)
+                analytics.user_name_map = user_name_map
+                
+                # Generate all visualization images
+                images_to_send = []
+                
+                # Activity heatmap
+                try:
+                    heatmap_path = analytics.create_activity_heatmap()
+                    images_to_send.append(("Activity Heatmap", heatmap_path))
+                except Exception as e:
+                    print(f"Error creating heatmap: {e}")
+                
+                # Top posters
+                try:
+                    posters_path = analytics.create_top_posters_chart()
+                    images_to_send.append(("Top Requesters", posters_path))
+                except Exception as e:
+                    print(f"Error creating top posters chart: {e}")
+                
+                # Longest posters
+                try:
+                    longest_path = analytics.create_longest_posters_chart()
+                    images_to_send.append(("Longest Duration", longest_path))
+                except Exception as e:
+                    print(f"Error creating longest posters chart: {e}")
+                
+                # Genres
+                try:
+                    genres_path = analytics.create_genres_chart()
+                    images_to_send.append(("Top Genres", genres_path))
+                except Exception as e:
+                    print(f"Error creating genres chart: {e}")
+                
+                # Years
+                try:
+                    years_path = analytics.create_years_chart()
+                    images_to_send.append(("Songs by Year", years_path))
+                except Exception as e:
+                    print(f"Error creating years chart: {e}")
+                
+                # Most played songs
+                try:
+                    played_path = analytics.create_most_played_chart()
+                    images_to_send.append(("Most Played Songs", played_path))
+                except Exception as e:
+                    print(f"Error creating most played chart: {e}")
+                
+                # Create main summary embed
+                embed = discord.Embed(
+                    title=f"Server Music Wrap ({timeframe_display})",
+                    color=discord.Color.gold(),
+                    description="Here's your server's music wrap!"
+                )
+                
+                total_songs = len(analytics.df)
+                total_duration = analytics.df['duration'].sum() or 0
+                total_hours = total_duration / 3600
+                
+                embed.add_field(name="Total Songs Queued", value=f"{total_songs}", inline=True)
+                embed.add_field(name="Total Duration", value=f"{total_hours:.1f} hours", inline=True)
+                
+                top_posters = analytics.get_top_posters(5)
+                if top_posters:
+                    posters_str = "\n".join([f"<@{p['user_id']}>: {p['count']} songs" for p in top_posters])
+                    embed.add_field(name="Top Requesters", value=posters_str, inline=False)
+                
+                top_genres = analytics.get_top_genres(5)
+                if top_genres:
+                    genres_str = "\n".join([f"{g['genre']}: {g['count']}" for g in top_genres])
+                    embed.add_field(name="Top Genres", value=genres_str, inline=False)
+                
+                top_songs = analytics.get_most_played_songs(5)
+                if top_songs:
+                    songs_str = "\n".join([f"{s['title']}: {s['count']} times" for s in top_songs[:5]])
+                    embed.add_field(name="Most Played", value=songs_str, inline=False)
+                
+                top_years = analytics.get_top_years(3)
+                if top_years:
+                    years_str = "\n".join([f"{y['year']}: {y['count']} songs" for y in top_years])
+                    embed.add_field(name="Top Years", value=years_str, inline=False)
+                
+                await send_message(ctx, embed=embed)
+                
+                # Send all generated images
+                for title, path in images_to_send:
+                    try:
+                        with open(path, 'rb') as f:
+                            await ctx.channel.send(f"**{title}**", file=discord.File(f, filename=f"{title.lower().replace(' ', '_')}.png"))
+                    except Exception as e:
+                        print(f"Error sending {title} image: {e}")
+                        
+        except Exception as e:
+            print(f"Error generating wrap: {e}")
+            await send_message(ctx, f"Error generating wrap: {e}")
+
     @bot.command(name="ifuckedup")
+
     async def restart(ctx):
         """A command to restart the bot. Usage: ifuckedup"""
         import sys

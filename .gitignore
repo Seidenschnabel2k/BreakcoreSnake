@@ -12,3 +12,6 @@ __pycache__/
 
 # Logs
 log/
+
+# metric pictures
+visualizations/
