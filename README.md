@@ -13,6 +13,7 @@ BreakcoreSnake is a feature-rich Discord music bot, developed in Python. The bot
 - Queue and skip tracks
 - Pause, resume, and stop playback
 - Support for multiple audio sources (YouTube, etc.)
+- Spotify URL support (track via play command, album/playlist via playlist command)
 - Easy-to-use commands
 
 ## Installation
@@ -42,6 +43,8 @@ pip install -r requirements.txt
 
     ```
     DISCORD_TOKEN=your-token-here
+    SPOTIFY_CLIENT_ID=your-spotify-client-id
+    SPOTIFY_CLIENT_SECRET=your-spotify-client-secret
     ```
 
 2. Run the bot:

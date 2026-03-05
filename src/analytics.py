@@ -4,11 +4,8 @@ import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
 import matplotlib.pyplot as plt
 import seaborn as sns
-from datetime import datetime, timedelta
-from pathlib import Path
+from datetime import datetime
 from typing import Dict, List, Tuple, Optional
-import matplotlib.dates as mdates
-from matplotlib.patches import Rectangle
 import glob
 
 # Configure matplotlib for better looking output

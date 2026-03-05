@@ -6,6 +6,7 @@ import time
 from datetime import datetime, timedelta
 from music import get_player, FFMPEG_OPTIONS, YTDLSource
 from analytics import Analytics
+from spotify import SpotifyResolver
 from utils import (
     ensure_voice,
     make_track_embed,
@@ -18,6 +19,8 @@ from utils import (
 
 
 def setup(bot):
+    spotify = SpotifyResolver()
+
     @bot.command(name="tits")
     async def join(ctx):
         """Join the caller's voice channel."""
@@ -36,6 +39,20 @@ def setup(bot):
     async def play(ctx, *, query):
         """Add a track to the queue. Usage: p <query>"""
         query = query.strip()
+
+        if spotify.is_spotify_url(query):
+            url_type = spotify.get_url_type(query)
+            if url_type != "track":
+                return await send_message(
+                    ctx,
+                    "Spotify albums/playlists should be queued with `pl`.",
+                )
+            try:
+                query = await spotify.to_youtube_music_query(query)
+            except ValueError as e:
+                return await send_message(ctx, str(e))
+            except Exception as e:
+                return await send_message(ctx, f"Failed to resolve Spotify track: {e}")
 
         vc = await ensure_voice(ctx)
         if not vc:
@@ -63,7 +80,52 @@ def setup(bot):
         vc = await ensure_voice(ctx)
         if not vc:
             return
+
         player = get_player(ctx.guild)
+
+        if spotify.is_spotify_url(query):
+            url_type = spotify.get_url_type(query)
+            if url_type == "track":
+                return await send_message(
+                    ctx,
+                    "Spotify tracks should be queued with `p`.",
+                )
+
+            async with ctx.typing():
+                await send_message(ctx, "Processing Spotify album/playlist... This may take a moment.")
+                try:
+                    yt_queries = await spotify.to_youtube_music_queries(query)
+                except ValueError as e:
+                    return await send_message(ctx, str(e))
+                except Exception as e:
+                    return await send_message(ctx, f"Failed to resolve Spotify URL: {e}")
+
+                infos = []
+                skipped = []
+                for yt_query in yt_queries:
+                    added_infos, skipped_infos = await player.add_track(
+                        yt_query,
+                        ctx.author,
+                        playlist=False,
+                    )
+                    infos.extend(added_infos)
+                    skipped.extend(skipped_infos)
+
+            added_count = max(0, len(infos) - len(skipped))
+            message = f"Added {added_count} tracks from Spotify {url_type}."
+            if vc.is_paused():
+                message += " (playback is paused)."
+            else:
+                message += "."
+
+            if not vc.is_paused() and not vc.is_playing() and added_count > 0:
+                await player.play_next(interactor=ctx.author, bot=bot)
+
+            await send_message(ctx, message)
+            if skipped:
+                await send_message(ctx, f"Skipped {len(skipped)} duplicate tracks already in queue.")
+            return
+
         async with ctx.typing():
             await send_message(ctx, "Processing playlist... This may take a moment.")
             infos, skipped = await player.add_track(query, ctx.author, playlist=True)
