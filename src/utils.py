@@ -17,7 +17,8 @@ def format_duration(seconds: int) -> str:
 def format_progress(start_time: float, total: int) -> str:
     if total is None:
         return "Live"
-    elapsed = int(time.time() - start_time)
+    total = int(total)
+    elapsed = max(0, int(time.time() - start_time))
     if elapsed > total:
         elapsed = total
     em, es = divmod(elapsed, 60)
@@ -25,8 +26,8 @@ def format_progress(start_time: float, total: int) -> str:
     tm, ts = divmod(total, 60)
     th, tm = divmod(tm, 60)
     if th:
-        return f"{eh:.0f}:{em:02.0f}:{es:02.0f} / {th}:{tm:02.0f}:{ts:02.0f}"
-    return f"{em:.0f}:{es:02.0f} / {tm:.0f}:{ts:02.0f}"
+        return f"{eh:d}:{em:02d}:{es:02d} / {th:d}:{tm:02d}:{ts:02d}"
+    return f"{em:d}:{es:02d} / {tm:d}:{ts:02d}"
 
 def parse_time(input_str: str) -> int:
     parts = input_str.strip().split(":")
