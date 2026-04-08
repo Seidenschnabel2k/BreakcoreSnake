@@ -16,8 +16,8 @@ class SpotifyTrack:
     artists: list[str]
 
     def to_ytmusic_query(self) -> str:
-        artist_text = ", ".join(self.artists)
-        return f"ytsearch1:{self.title} - {artist_text} audio"
+        artist_text = self.artists[0]
+        return f"ytsearch1:{self.title} - {artist_text}"
 
 
 class SpotifyResolver:
