@@ -32,15 +32,24 @@ class SpotifyResolver:
         self._access_token: str | None = None
         self._token_expires_at = 0.0
 
+    @staticmethod
+    def _normalize_url(value: str) -> str:
+        return re.sub(
+            r"(https?://open\.spotify\.com)/intl-[^/]+/",
+            r"\1/",
+            value or "",
+            flags=re.IGNORECASE,
+        )
+
     def is_spotify_url(self, value: str) -> bool:
-        return bool(self.SPOTIFY_URL_RE.search(value or ""))
+        return bool(self.SPOTIFY_URL_RE.search(self._normalize_url(value)))
 
     def get_url_type(self, value: str) -> str | None:
-        match = self.SPOTIFY_URL_RE.search(value or "")
+        match = self.SPOTIFY_URL_RE.search(self._normalize_url(value))
         return match.group("kind").lower() if match else None
 
     def _extract_kind_and_id(self, value: str) -> tuple[str, str]:
-        match = self.SPOTIFY_URL_RE.search(value or "")
+        match = self.SPOTIFY_URL_RE.search(self._normalize_url(value))
         if not match:
             raise ValueError("Not a valid Spotify track/album/playlist URL.")
         return match.group("kind").lower(), match.group("id")
