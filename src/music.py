@@ -80,6 +80,7 @@ class MusicPlayer:
         self.current = None
         self.start_time = None
         self.paused_offset = None
+        self.seeking = False
 
     async def add_track(self, query, requester, playlist=False, index=None, prio=False):
         skipped_tracks = []
@@ -146,10 +147,10 @@ class MusicPlayer:
         def after_play(err):
             if err:
                 print(f"Playback error: {err}")
-
-            asyncio.run_coroutine_threadsafe(
-                self.play_next(interactor, bot), bot.loop
-            )
+            if not self.seeking:
+                asyncio.run_coroutine_threadsafe(
+                    self.play_next(interactor, bot), bot.loop
+                )
 
         vc.play(source, after=after_play)
         vc.source = source

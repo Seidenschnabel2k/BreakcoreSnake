@@ -198,25 +198,27 @@ def setup(bot):
 
     @bot.command(name="s")
     async def skip(ctx, index: int = 0):
-        """Skip the current track or remove a queued track by index."""
+        """Skip current track or remove queued track by index. Usage: s [index]"""
         player = get_player(ctx.guild)
         vc = ctx.voice_client
 
-        if not vc or not vc.is_playing():
-            return await send_message(ctx, "Nothing is playing right now.")
-
         if index == 0:
+            if not vc or not (vc.is_playing() or vc.is_paused()):
+                return await send_message(ctx, "Nothing is playing right now.")
+            title = player.current["title"]
             vc.stop()
+            return await send_message(ctx, f"Skipped **{title}**.")
 
-            # await player.play_next(interactor=ctx.author, bot=bot)
-            
-            await send_message(ctx, f"Skipped **{player.current['title']}** track.")
-            
+        total = len(player.now_queue) + len(player.queue)
+        if index < 1 or index > total:
+            return await send_message(ctx, f"Invalid index. Queue has {total} track(s).")
+
+        if index <= len(player.now_queue):
+            track = player.now_queue.pop(index - 1)
         else:
-            if index > len(player.queue):
-                return await send_message(ctx, "Index bigger than queue length.")
-            skipped_track = player.queue.pop(index - 1)
-            await send_message(ctx, f"Skipped **{skipped_track['title']}** from the queue.")
+            track = player.queue.pop(index - 1 - len(player.now_queue))
+
+        await send_message(ctx, f"Removed **{track['title']}** from the queue.")
 
     @bot.command(name="stop")
     async def stop(ctx):
@@ -272,10 +274,9 @@ def setup(bot):
 
     @bot.command(name="seek")
     async def seek(ctx, *, position: str):
-        """Seek to a position in the current track."""
+        """Seek to a position in the current track. Usage: seek mm:ss"""
         vc = ctx.voice_client
-
-        if not vc or not vc.is_playing():
+        if not vc or not (vc.is_playing() or vc.is_paused()):
             return await send_message(ctx, "No song is currently playing.")
 
         try:
@@ -283,49 +284,43 @@ def setup(bot):
         except ValueError:
             return await send_message(ctx, "Invalid time format. Use ss, mm:ss or hh:mm:ss.")
 
-        current = vc.source
-        info = current.data
+        player = get_player(ctx.guild)
+        info = player.current
         duration = info.get("duration")
-
         if duration and seconds >= duration:
             return await send_message(ctx, "Seek position is beyond track length.")
 
+        volume = vc.source.volume if hasattr(vc.source, "volume") else 0.5
+
+        # Fetch fresh stream URL before stopping to minimize silence gap
+        fresh_source = await YTDLSource.from_url(info["webpage_url"], loop=bot.loop, stream=True)
+        real_url = fresh_source.data["url"]
+
+        new_ffmpeg = discord.FFmpegPCMAudio(real_url, **{
+            "before_options": f"-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -ss {seconds}",
+            "options": "-vn",
+        })
+        wrapped = discord.PCMVolumeTransformer(new_ffmpeg, volume=volume)
+        wrapped.data = fresh_source.data
+
+        # Set flag so after_play skips play_next when vc.stop() fires
+        player.seeking = True
         vc.stop()
 
-        fresh_source = await YTDLSource.from_url(
-            info["webpage_url"], loop=bot.loop, stream=True
-        )
+        player.start_time = time.time() - seconds
+        player.paused_offset = None
 
-        fresh_info = fresh_source.data
-        real_url = fresh_info["url"]
+        def after_seek(err):
+            if err:
+                print(f"Seek playback error: {err}")
+            player.seeking = False
+            asyncio.run_coroutine_threadsafe(
+                player.play_next(ctx.author, bot=bot), bot.loop
+            )
 
-        seek_opts = FFMPEG_OPTIONS.copy()
-        seek_opts = {
-            "before_options": (
-                "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
-            ),
-            "options": f"-vn -ss {seconds}"
-}
+        vc.play(wrapped, after=after_seek)
 
-        # FFmpeg source using fresh URL
-        source = discord.FFmpegPCMAudio(real_url, **seek_opts)
-
-        wrapped = discord.PCMVolumeTransformer(source, volume=current.volume)
-        wrapped.data = fresh_info
-        wrapped.start_time = time.time() - seconds
-
-        vc.play(
-            wrapped,
-            after=lambda e: asyncio.run_coroutine_threadsafe(
-                get_player(ctx.guild).play_next(ctx.author, bot=bot), bot.loop
-            ),
-        )
-
-        vc.source = wrapped
-
-        await send_message(
-            ctx, f"Seeked to {format_duration(seconds)} in **{fresh_info['title']}**"
-        )
+        await send_message(ctx, f"Seeked to {format_duration(seconds)} in **{info['title']}**")
 
 
     @bot.command(name="h")
