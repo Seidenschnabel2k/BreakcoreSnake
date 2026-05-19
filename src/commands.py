@@ -210,6 +210,12 @@ def setup(bot):
             return await send_message(ctx, f"Skipped **{title}**.")
 
         total = len(player.now_queue) + len(player.queue)
+
+        if index < 0:
+            if index < -total:
+                return await send_message(ctx, f"Invalid index. Queue has {total} track(s).")
+            index = total + index + 1
+
         if index < 1 or index > total:
             return await send_message(ctx, f"Invalid index. Queue has {total} track(s).")
 
