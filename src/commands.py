@@ -1,3 +1,4 @@
+import re
 import random
 import asyncio
 import discord
@@ -16,6 +17,10 @@ from utils import (
     send_message,
     TARGET_CHANNEL_ID,
 )
+
+
+_X_LINK_RE = re.compile(r'(https?://(?:www\.)?)(x\.com)', re.IGNORECASE)
+_X_REPLACEMENT = r'\1fixvx.com'
 
 
 def setup(bot):
@@ -600,6 +605,15 @@ def setup(bot):
         prefix = bot.command_prefix
 
         if message.author.bot:
+            return
+
+        if _X_LINK_RE.search(message.content):
+            new_content = _X_LINK_RE.sub(_X_REPLACEMENT, message.content)
+            try:
+                await message.delete()
+            except Exception:
+                pass
+            await message.channel.send(f"**{message.author.display_name}**: {new_content}")
             return
 
         # only allow in target channel
